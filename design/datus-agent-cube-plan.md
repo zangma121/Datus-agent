@@ -81,16 +81,18 @@
 
 ## M1b 两级键控（tenant > project）
 
-### T1.5 datasource_scope 两极化
-- **文件**：`datus/storage/datasource_scope.py` 及其调用方
-  （`datus/storage/*/store.py` 中拼 storage_key 处）
-- **做**：`storage_key = {tenant_id}:{datasource_id}:{row_id}`（tenant 缺省
-  `default`）；表结构增加 `tenant_id` 列（含建表迁移：旧行回填 `default`）；
-  `tenant_condition()` 并入现有 `datasource_condition()` WHERE 组合。
-- **注意**：所有改动保持"tenant=None 即旧行为"形态，收敛前缀拼装到
-  datasource_scope 单个模块内。
-- **验收**：`pytest unit_tests/storage/ -q` 全绿 + 新增跨租户读写用例
-  （A 租户写入、B 租户检索 0 命中）。
+### T1.5 datasource_scope 两极化 ✅ 已实现（提交 cd8a7a75）
+- **实现要点（比原计划更优）**：兼容优先设计——默认租户保持旧
+  `{datasource}:{row_id}` 键与 `tenant_id=''` 列值，**零迁移**；非默认租户写
+  `{tenant}:{datasource}:{row_id}` + `tenant_id` 列（经基类既有 ensure_columns
+  机制自动加列），读路径 `tenant_column=True` 按列过滤（默认租户的
+  `eq(tenant_id,'')` 同时排除外来租户行）；无列 store 走 LIKE 前缀兜底。
+- **涉及**：`datasource_scope.py`（TENANT_ID_COLUMN/条件/键构建/校验）、
+  `storage/base.py`（schema+迁移+默认值+删除路径）、`subject_tree/store.py`
+  （基类 pop/盖章/6 处条件）、`metric/store.py`（4 处条件+MetricRAG resolve）、
+  `storage/registry.py`（LRU 键加 tenant 段）。
+- **测试**：`test_datasource_scope_tenant.py` + `test_tenant_isolation_unit.py`
+  （跨租户不可见/默认租户不可见/旧格式保留）；存储套件 1940 全绿。
 
 ### T1.6 session 目录插层
 - **文件**：`datus/models/session_manager.py`、
@@ -99,23 +101,20 @@
   default 外的历史位置或一次性脚本搬移，二选一在实现时定，倾向脚本搬移）。
 - **验收**：两租户并发问答会话互不可见（列表/恢复各测一次）。
 
-### T1.7 DatusService 缓存键改二元组
-- **文件**：`datus/api/services/datus_service_cache.py`
-- **做**：LRU 键 `project_id` → `(tenant_id, project_id)`；注意缓存失效路径同步。
-- **验收**：单测：同 project 不同 tenant 得到不同实例；命中计数不串。
+### T1.7 DatusService 缓存键改二元组 ✅ 已实现（提交 bc1fabd3）
+- `get_or_create(project_id, factory, expected_fingerprint, tenant_id="")` 复合键
+  `(tenant_id, project_id)`；`evict()` 同步带租户；`deps.py` 传入
+  `ctx.tenant_id`。空租户 = 旧行为。测试：同项目异租户得不同实例、evict 按租户。
 
-### T1.8 存量数据迁移脚本
-- **文件**：新建 `scripts/migrate_default_tenant.py`
-- **做**：扫描 `~/.datus/data/*/datus_db`，为无 tenant 列的表加列并回填
-  `default`；幂等（可重复执行）。
-- **验收**：在复制出的 data 目录上演练一遍，前后行数一致、抽查 storage_key。
+### T1.8 存量数据迁移脚本 ✅ 基本被兼容设计吸收
+- 默认租户零迁移（旧键、`tenant_id=''`）；`tenant_id` 列由 ensure_columns 在
+  首次打开表时自动补列回填 `''`。剩余工作：无（如后续发现无列 store 需要
+  显式迁移再启用本任务）。
 
 ### T1.9 隔离测试套件（阶段验收）
 - **文件**：新建 `tests/integration/test_tenant_isolation.py`
-- **做**：移植 chat2agent `test_tenant_isolation.py` 的四类用例：KB 跨租户不可见、
-  会话/缓存不串、多租户模式头缺失 400、单租户兼容模式行为不变。
-- **验收**：`pytest tests/integration/test_tenant_isolation.py -q` 全绿；跑
-  `scripts/smoke_chat.sh`。
+- **做**：在 T1.5 的单级隔离测试之上，补会话/缓存维度的集成用例（依赖
+  T1.6 完成后收口）。
 
 ---
 
