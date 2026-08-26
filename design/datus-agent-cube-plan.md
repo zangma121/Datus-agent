@@ -256,10 +256,18 @@
   engine=metricflow → `before_sql_read` 用 sqlglot 改写 SQL，无法表达即拒绝。
 - **验收**：单测：MQL filters 注入正确、SQL 改写正确、不可表达拒绝且原因可读。
 
-### T4.6 列屏蔽与权限矩阵 E2E
-- **做**：`after_read_result` 按 `rel_subject_columns` 剔除/脱敏 + masked 警告；
-  E2E：`tests/e2e/test_permission_matrix.py`（有/无权限/Owner/禁列/行规则 五类）。
-- **验收**：E2E 全绿（无真实环境时以集成测试 + mock 网关替代并记录）。
+### T4.6 列屏蔽与权限矩阵 E2E ✅ 单测面完成（提交 ecafc72c→a209c229→d768655c）
+- **评审修复（d768655c）补齐了关键接线**：行权限现在跑在真实数据路径
+  （SemanticTools.query_metrics 调 before_sql_read）；Cube 适配器
+  inject_row_filters 消费 row_filters 并入查询载荷；list_metrics 同样过
+  指标权限过滤。
+- **遗留缺口（记录待办）**：
+  1. 主体模型只匹配 user_id（chat2agent 是 USER/ROLE/DEPT 并集）——挂在
+     角色/部门上的行规则、列规则当前不可见 → fail-open 风险，接 GienBI
+     真实库前必须补（需要 role/dept 表结构）；
+  2. 列屏蔽不覆盖 arrow 格式（snowflake）结果与 query_metrics 结果形态；
+  3. cube 数值 gt/lt 操作符映射成了日期操作符（接线前休眠 bug）；
+  4. 权限矩阵 E2E（tests/e2e/test_permission_matrix.py）待 live 环境。
 
 ---
 
