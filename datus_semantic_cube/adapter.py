@@ -202,7 +202,12 @@ class CubeAdapter(BaseSemanticAdapter):
 
         if dry_run:
             payload = await self.client.sql(query)
-            sql_parts = payload.get("sql") or []
+            # /sql response shape varies by Cube version: the SQL parts array
+            # sits either at the top level or nested under "sql".
+            sql_payload = payload.get("sql")
+            if isinstance(sql_payload, dict):
+                sql_payload = sql_payload.get("sql")
+            sql_parts = sql_payload if isinstance(sql_payload, list) else []
             return QueryResult(
                 columns=[],
                 data=[],
