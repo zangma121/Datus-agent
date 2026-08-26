@@ -111,6 +111,9 @@ datus-api = "datus.entrypoints:api_main"
 datus-mcp = "datus.entrypoints:mcp_main"
 datus-gateway = "datus.entrypoints:gateway_main"
 
+[project.entry-points."datus.semantic_adapters"]
+cube = "datus_semantic_cube:register"
+
 [build-system]
 requires = ["setuptools>=80.9.0", "wheel"]
 build-backend = "setuptools.build_meta"
