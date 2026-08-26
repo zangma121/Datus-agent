@@ -94,3 +94,15 @@ def test_provider_satisfies_auth_provider_protocol():
     from datus.api.auth.provider import AuthProvider
 
     assert isinstance(GienBIAuthProvider(), AuthProvider)
+
+
+@pytest.mark.asyncio
+class TestReservedDefaultOrg:
+    async def test_org_named_default_is_rejected(self):
+        """'default' is the reserved single-tenant namespace — an org with this
+        literal name must not silently share legacy rows."""
+        provider = GienBIAuthProvider()
+        with pytest.raises(DatusException):
+            await provider.authenticate(
+                _make_request({"X-GienBI-OrgId": "default", "X-GienBI-UserId": "alice"})
+            )

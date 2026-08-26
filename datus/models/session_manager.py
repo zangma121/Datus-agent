@@ -8,6 +8,8 @@ import ast
 import json
 import os
 import re
+
+from datus.storage.datasource_scope import validate_tenant_id
 import sqlite3
 import uuid
 from dataclasses import dataclass
@@ -109,9 +111,7 @@ class SessionManager:
             self.session_dir = str(get_path_manager(path_manager=path_manager, agent_config=agent_config).sessions_dir)
 
         # Tenant layer first (tenant > project > user scope).
-        from datus.storage.datasource_scope import _validate_tenant_id
-
-        tenant = _validate_tenant_id(tenant_id)
+        tenant = validate_tenant_id(tenant_id)
         if tenant is not None:
             self.session_dir = os.path.join(self.session_dir, tenant)
 

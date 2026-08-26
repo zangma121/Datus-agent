@@ -24,7 +24,12 @@ import pyarrow as pa
 from datus_storage_base.conditions import And, eq, in_, not_
 
 from datus.storage.base import BaseEmbeddingStore, EmbeddingModel
-from datus.storage.datasource_scope import add_datasource_scope_to_rows, datasource_condition, resolve_datasource_id
+from datus.storage.datasource_scope import (
+    add_datasource_scope_to_rows,
+    datasource_condition,
+    resolve_datasource_id,
+    resolve_tenant_id,
+)
 from datus.storage.fts import FtsField, FtsSpec
 from datus.utils.loggings import get_logger
 
@@ -225,16 +230,18 @@ class SemanticDatasetRAG:
 
         self.agent_config = agent_config
         self.datasource_id = resolve_datasource_id(agent_config, datasource_id)
+        self.tenant_id = resolve_tenant_id(agent_config)
         self.storage: SemanticDatasetStorage = get_storage(
             SemanticDatasetStorage,
             "semantic_model",
             project=agent_config.project_name,
             datasource_id=self.datasource_id,
+            tenant_id=self.tenant_id,
         )
         self._sub_agent_filter = _build_sub_agent_filter(agent_config, sub_agent_name, self.storage, "tables")
 
     def _sub_agent_conditions(self) -> list:
-        conditions = [datasource_condition(self.datasource_id)]
+        conditions = [datasource_condition(self.datasource_id, getattr(self, "tenant_id", None), tenant_column=True)]
         if self._sub_agent_filter:
             conditions.append(self._sub_agent_filter)
         return conditions
@@ -505,11 +512,11 @@ class SemanticDatasetRAG:
     # ------------------------------------------------------------------
 
     def store_batch(self, rows: List[Dict[str, Any]]) -> None:
-        self.storage.store_batch(add_datasource_scope_to_rows(rows, self.datasource_id))
+        self.storage.store_batch(add_datasource_scope_to_rows(rows, self.datasource_id, tenant_id=self.tenant_id))
         self._refresh_metadata_documents_with_rows(rows)
 
     def upsert_batch(self, rows: List[Dict[str, Any]]) -> None:
-        self.storage.upsert_batch(add_datasource_scope_to_rows(rows, self.datasource_id), on_column="storage_key")
+        self.storage.upsert_batch(add_datasource_scope_to_rows(rows, self.datasource_id, tenant_id=self.tenant_id), on_column="storage_key")
         self._refresh_metadata_documents_with_rows(rows)
 
     def create_indices(self) -> None:

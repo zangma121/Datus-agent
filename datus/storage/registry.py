@@ -86,8 +86,8 @@ def _get_storage_cached(
     if isinstance(factory, type) and issubclass(factory, BaseSubjectEmbeddingStore):
         kwargs["project"] = project
         kwargs["datasource_id"] = datasource_id
-        if tenant_id:
-            kwargs["tenant_id"] = tenant_id
+    if tenant_id:
+        kwargs["tenant_id"] = tenant_id
 
     store = factory(get_embedding_model(embedding_model_conf_name), **kwargs)
     return store

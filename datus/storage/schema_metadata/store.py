@@ -12,7 +12,12 @@ from datus.configuration.agent_config import AgentConfig
 from datus.schemas.base import TABLE_TYPE
 from datus.schemas.node_models import TableSchema, TableValue
 from datus.storage.base import BaseEmbeddingStore, WhereExpr
-from datus.storage.datasource_scope import add_datasource_scope_to_rows, datasource_condition, resolve_datasource_id
+from datus.storage.datasource_scope import (
+    add_datasource_scope_to_rows,
+    datasource_condition,
+    resolve_datasource_id,
+    resolve_tenant_id,
+)
 from datus.storage.embedding_models import EmbeddingModel
 from datus.storage.fts import FtsField, FtsSpec
 from datus.utils.constants import DBType
@@ -255,23 +260,26 @@ class SchemaWithValueRAG:
         from datus.storage.registry import get_storage
 
         self.datasource_id = resolve_datasource_id(agent_config, datasource_id)
+        self.tenant_id = resolve_tenant_id(agent_config)
         self.schema_store = get_storage(
             SchemaStorage,
             "database",
             project=agent_config.project_name,
             datasource_id=self.datasource_id,
+            tenant_id=self.tenant_id,
         )
         self.value_store = get_storage(
             SchemaValueStorage,
             "database",
             project=agent_config.project_name,
             datasource_id=self.datasource_id,
+            tenant_id=self.tenant_id,
         )
         self._sub_agent_filter = _build_sub_agent_filter(agent_config, sub_agent_name, self.schema_store, "tables")
 
     def _sub_agent_conditions(self) -> list:
         """Build datasource and sub-agent filter conditions."""
-        conditions = [datasource_condition(self.datasource_id)]
+        conditions = [datasource_condition(self.datasource_id, getattr(self, "tenant_id", None), tenant_column=True)]
         if self._sub_agent_filter:
             conditions.append(self._sub_agent_filter)
         return conditions
@@ -293,7 +301,7 @@ class SchemaWithValueRAG:
 
     def store_batch(self, schemas: List[Dict[str, Any]], values: List[Dict[str, Any]]):
         if schemas:
-            self.schema_store.store_batch(add_datasource_scope_to_rows(schemas, self.datasource_id, id_field=""))
+            self.schema_store.store_batch(add_datasource_scope_to_rows(schemas, self.datasource_id, id_field="", tenant_id=self.tenant_id))
 
         if len(values) == 0:
             return
@@ -307,7 +315,7 @@ class SchemaWithValueRAG:
                 sample_rows = json2csv(sample_rows)
             item["sample_rows"] = sample_rows
             final_values.append(item)
-        self.value_store.store_batch(add_datasource_scope_to_rows(final_values, self.datasource_id, id_field=""))
+        self.value_store.store_batch(add_datasource_scope_to_rows(final_values, self.datasource_id, id_field="", tenant_id=self.tenant_id))
 
         logger.debug(f"Batch stored {len(schemas)} schemas, {len(final_values)} values")
 

@@ -18,7 +18,7 @@ from datus.storage.datasource_scope import (
     DATASOURCE_ID_COLUMN,
     STORAGE_KEY_COLUMN,
     TENANT_ID_COLUMN,
-    _validate_tenant_id,
+    validate_tenant_id,
     build_storage_key,
     datasource_condition,
 )
@@ -99,7 +99,7 @@ class BaseEmbeddingStore(StorageBase):
         self.model = embedding_model
         # Tenant scope for two-level keying (tenant > project); ``None`` is
         # the default tenant and keeps the legacy storage_key format.
-        self._tenant_id = _validate_tenant_id(tenant_id)
+        self._tenant_id = validate_tenant_id(tenant_id)
         self.batch_size = embedding_model.batch_size
         self.table_name = f"{table_prefix}{table_name}" if table_prefix else table_name
         self.vector_source_name = vector_source_name

@@ -19,7 +19,13 @@ from datus_storage_base.conditions import And, Node, WhereExpr, and_, eq, in_, o
 from datus.schemas.base import TABLE_TYPE
 from datus.schemas.node_models import TableSchema, TableValue
 from datus.storage.base import StorageBase
-from datus.storage.datasource_scope import DATASOURCE_ID_COLUMN, datasource_condition, resolve_datasource_id
+from datus.storage.datasource_scope import (
+    DATASOURCE_ID_COLUMN,
+    TENANT_ID_COLUMN,
+    datasource_condition,
+    resolve_datasource_id,
+    resolve_tenant_id,
+)
 from datus.storage.fts import FtsField, FtsIndexStatus, FtsSpec
 from datus.utils.constants import DBType
 from datus.utils.exceptions import DatusException, ErrorCode
@@ -122,6 +128,7 @@ def _qualified_name(row: Dict[str, Any]) -> str:
 def _build_where_clause(
     *,
     datasource_id: str = "",
+    tenant_id: Optional[str] = None,
     catalog_name: str = "",
     database_name: str = "",
     schema_name: str = "",
@@ -131,7 +138,7 @@ def _build_where_clause(
 ) -> Optional[Node]:
     conditions = []
     if datasource_id:
-        conditions.append(datasource_condition(datasource_id))
+        conditions.append(datasource_condition(datasource_id, tenant_id, tenant_column=True))
     if catalog_name:
         conditions.append(eq("catalog_name", catalog_name))
     if database_name:
@@ -223,8 +230,8 @@ class PlainLanceStore(StorageBase):
             assert last_error is not None
             raise last_error
 
-    def delete_datasource_rows(self, datasource_id: str) -> None:
-        self._delete_rows(datasource_condition(datasource_id))
+    def delete_datasource_rows(self, datasource_id: str, tenant_id: str | None = None) -> None:
+        self._delete_rows(datasource_condition(datasource_id, tenant_id, tenant_column=True))
 
     def _delete_rows(self, where: WhereExpr) -> None:
         self._ensure_table_ready()
@@ -375,6 +382,7 @@ class MetadataFactsStore(PlainLanceStore):
                 [
                     pa.field("fact_id", pa.string()),
                     pa.field(DATASOURCE_ID_COLUMN, pa.string()),
+                    pa.field(TENANT_ID_COLUMN, pa.string()),
                     pa.field("identifier", pa.string()),
                     pa.field("catalog_name", pa.string()),
                     pa.field("database_name", pa.string()),
@@ -416,6 +424,7 @@ class KbRetrievalDocumentStore(PlainLanceStore):
                 [
                     pa.field("doc_id", pa.string()),
                     pa.field(DATASOURCE_ID_COLUMN, pa.string()),
+                    pa.field(TENANT_ID_COLUMN, pa.string()),
                     pa.field("component_type", pa.string()),
                     pa.field("entity_type", pa.string()),
                     pa.field("entity_key", pa.string()),
@@ -501,6 +510,7 @@ class MetadataFtsRAG:
 
         self.agent_config = agent_config
         self.datasource_id = resolve_datasource_id(agent_config, datasource_id)
+        self.tenant_id = resolve_tenant_id(agent_config)
         self.search_mode = _search_mode(agent_config)
         if self.search_mode != KbSearchMode.FTS:
             raise DatusException(
@@ -542,7 +552,7 @@ class MetadataFtsRAG:
         self.last_search_info = self._search_info(**kwargs)
 
     def _sub_agent_conditions(self) -> list:
-        conditions = [datasource_condition(self.datasource_id)]
+        conditions = [datasource_condition(self.datasource_id, getattr(self, "tenant_id", None), tenant_column=True)]
         if self._sub_agent_filter:
             conditions.append(self._sub_agent_filter)
         return conditions
@@ -558,6 +568,7 @@ class MetadataFtsRAG:
     ) -> Optional[Node]:
         base = _build_where_clause(
             datasource_id=self.datasource_id,
+            tenant_id=self.tenant_id,
             catalog_name=catalog_name,
             database_name=database_name,
             schema_name=schema_name,
@@ -569,8 +580,8 @@ class MetadataFtsRAG:
         return self._sub_agent_filter if base is None else and_(base, self._sub_agent_filter)
 
     def truncate(self) -> None:
-        self.facts_store.delete_datasource_rows(self.datasource_id)
-        self.document_store.delete_datasource_rows(self.datasource_id)
+        self.facts_store.delete_datasource_rows(self.datasource_id, self.tenant_id)
+        self.document_store.delete_datasource_rows(self.datasource_id, self.tenant_id)
 
     def store_batch(self, schemas: List[Dict[str, Any]], values: List[Dict[str, Any]]) -> None:
         sample_by_identifier = self._sample_rows_by_identifier(values)
@@ -936,7 +947,7 @@ class MetadataFtsRAG:
             return {}, {}
         lookup_where = lookup_conditions[0] if len(lookup_conditions) == 1 else or_(*lookup_conditions)
         rows = self.facts_store._search_all(
-            where=and_(datasource_condition(self.datasource_id), lookup_where),
+            where=and_(datasource_condition(self.datasource_id, getattr(self, "tenant_id", None), tenant_column=True), lookup_where),
             select_fields=["fact_id", *self.SCHEMA_SELECT_FIELDS],
         ).to_pylist()
         fact_by_id = {str(row.get("fact_id") or ""): row for row in rows if row.get("fact_id")}
@@ -952,7 +963,7 @@ class MetadataFtsRAG:
         rows_by_identifier = {
             str(row.get("identifier") or ""): row
             for row in self.facts_store._search_all(
-                where=and_(datasource_condition(self.datasource_id), in_("identifier", list(identifiers))),
+                where=and_(datasource_condition(self.datasource_id, getattr(self, "tenant_id", None), tenant_column=True), in_("identifier", list(identifiers))),
                 select_fields=self.VALUE_SELECT_FIELDS,
             ).to_pylist()
             if row.get("identifier")
@@ -1014,6 +1025,7 @@ class MetadataFtsRAG:
             "sample_rows": sample_rows,
         }
         row[DATASOURCE_ID_COLUMN] = self.datasource_id
+        row[TENANT_ID_COLUMN] = self.tenant_id or ""
         row["fact_id"] = self._fact_id(row)
         row["content_hash"] = _stable_hash(row)
         row["updated_at"] = _utc_now()
@@ -1058,6 +1070,7 @@ class MetadataFtsRAG:
         row = {
             "doc_id": self._doc_id(fact),
             DATASOURCE_ID_COLUMN: self.datasource_id,
+            TENANT_ID_COLUMN: self.tenant_id or "",
             "component_type": "metadata",
             "entity_type": "table",
             "entity_key": self._fact_id(fact),

@@ -124,4 +124,11 @@ class GienBIAuthProvider:
                     "Only letters, digits, underscore and hyphen are allowed."
                 ),
             )
+        if header == HEADER_GIENBI_ORG_ID and candidate == "default":
+            # "default" is the reserved single-tenant namespace; an org with
+            # this literal name would silently read every legacy row.
+            raise DatusException(
+                ErrorCode.COMMON_VALIDATION_FAILED,
+                message="Org id 'default' is reserved for the single-tenant namespace.",
+            )
         return candidate

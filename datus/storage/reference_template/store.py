@@ -8,7 +8,7 @@ import pyarrow as pa
 
 from datus.configuration.agent_config import AgentConfig
 from datus.storage.base import EmbeddingModel
-from datus.storage.datasource_scope import datasource_condition, resolve_datasource_id
+from datus.storage.datasource_scope import datasource_condition, resolve_datasource_id, resolve_tenant_id
 from datus.storage.fts import FtsField, FtsSpec
 from datus.storage.subject_tree.store import BaseSubjectEmbeddingStore, base_schema_columns
 from datus.utils.exceptions import DatusException, ErrorCode
@@ -208,11 +208,13 @@ class ReferenceTemplateRAG:
         from datus.storage.registry import get_storage
 
         self.datasource_id = resolve_datasource_id(agent_config, datasource_id)
+        self.tenant_id = resolve_tenant_id(agent_config)
         self.reference_template_storage = get_storage(
             ReferenceTemplateStorage,
             "reference_template",
             project=agent_config.project_name,
             datasource_id=self.datasource_id,
+            tenant_id=self.tenant_id,
         )
         self._sub_agent_filter = _build_sub_agent_filter(
             agent_config, sub_agent_name, self.reference_template_storage, "templates"
@@ -220,7 +222,7 @@ class ReferenceTemplateRAG:
 
     def _sub_agent_conditions(self) -> List:
         """Build datasource and sub-agent filter conditions."""
-        conditions = [datasource_condition(self.datasource_id)]
+        conditions = [datasource_condition(self.datasource_id, getattr(self, "tenant_id", None), tenant_column=True)]
         if self._sub_agent_filter:
             conditions.append(self._sub_agent_filter)
         return conditions

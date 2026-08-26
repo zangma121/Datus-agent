@@ -23,7 +23,7 @@ class DatusServiceCache:
     def __init__(self, max_size: int = 128):
         self._max_size = max_size
         self._cache: collections.OrderedDict[tuple, DatusService] = collections.OrderedDict()
-        self._futures: dict[str, asyncio.Future[DatusService]] = {}
+        self._futures: dict[tuple[str, str], asyncio.Future[DatusService]] = {}
         self._lock = asyncio.Lock()
         self._pending_tasks: set[asyncio.Task] = set()
 
@@ -42,7 +42,7 @@ class DatusServiceCache:
     ) -> DatusService:
         """Return cached DatusService or create via factory (thundering-herd safe).
 
-        Entries are keyed on ``(tenant_id, project_id)``; ``tenant_id="")``
+        Entries are keyed on ``(tenant_id, project_id)``; an empty tenant_id
         is the default tenant and behaves like the legacy project-only key.
 
         If ``expected_fingerprint`` is provided and does not match the cached
@@ -99,7 +99,7 @@ class DatusServiceCache:
             svc = await factory()
         except Exception as e:
             async with self._lock:
-                self._futures.pop(project_id, None)
+                self._futures.pop(cache_key, None)
             if not fut.done():
                 fut.set_exception(e)
             raise
@@ -149,24 +149,24 @@ class DatusServiceCache:
             return
         await self._dispose(cache_key, svc)
 
-    async def _dispose(self, project_id: str, svc: DatusService) -> None:
+    async def _dispose(self, cache_key: tuple[str, str], svc: DatusService) -> None:
         """Shutdown a service, deferring if it still has active tasks."""
         if svc.has_active_tasks():
-            logger.info(f"Evicting DatusService for project {project_id} (deferring shutdown — active tasks)")
-            self._track(asyncio.create_task(self._deferred_shutdown(project_id, svc)))
+            logger.info(f"Evicting DatusService for {cache_key} (deferring shutdown — active tasks)")
+            self._track(asyncio.create_task(self._deferred_shutdown(cache_key, svc)))
         else:
-            logger.info(f"Evicting DatusService for project {project_id}")
+            logger.info(f"Evicting DatusService for {cache_key}")
             await svc.shutdown()
 
     @staticmethod
-    async def _deferred_shutdown(project_id: str, svc: DatusService) -> None:
+    async def _deferred_shutdown(cache_key: tuple[str, str], svc: DatusService) -> None:
         """Wait for active tasks to drain, then shutdown."""
         try:
             await svc.task_manager.wait_all_tasks()
             await svc.shutdown()
-            logger.info(f"Deferred shutdown completed for project {project_id}")
+            logger.info(f"Deferred shutdown completed for {cache_key}")
         except Exception:
-            logger.exception(f"Error in deferred shutdown for project {project_id}")
+            logger.exception(f"Error in deferred shutdown for {cache_key}")
 
     async def drain(self) -> None:
         """Await all pending background shutdown tasks before the loop closes."""

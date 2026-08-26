@@ -22,7 +22,7 @@ from datus.storage.datasource_scope import (
 
 class TestResolveTenantId:
     def test_unset_everywhere_resolves_default(self):
-        assert resolve_tenant_id(SimpleNamespace()) == "default"
+        assert resolve_tenant_id(SimpleNamespace()) is None
 
     def test_explicit_argument_wins(self):
         assert resolve_tenant_id(SimpleNamespace(tenant_id="cfg-org"), "arg-org") == "arg-org"
@@ -31,7 +31,7 @@ class TestResolveTenantId:
         assert resolve_tenant_id(SimpleNamespace(tenant_id="cfg-org")) == "cfg-org"
 
     def test_blank_values_fall_back_to_default(self):
-        assert resolve_tenant_id(SimpleNamespace(tenant_id="   "), "  ") == "default"
+        assert resolve_tenant_id(SimpleNamespace(tenant_id="   "), "  ") is None
 
 
 class TestBuildStorageKey:

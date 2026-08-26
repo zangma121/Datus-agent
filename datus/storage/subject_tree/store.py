@@ -20,7 +20,7 @@ from datus.storage.datasource_scope import (
     TENANT_ID_COLUMN,
     STORAGE_KEY_COLUMN,
     build_storage_key,
-    _validate_tenant_id,
+    validate_tenant_id,
     datasource_condition,
 )
 from datus.storage.embedding_models import EmbeddingModel
@@ -757,7 +757,7 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
         self.datasource_id = str(datasource_id or "")
         # Normalize so the reserved "default" tenant behaves identically to
         # unset (legacy '' column value, unprefixed storage_key).
-        self.tenant_id = _validate_tenant_id(tenant_id)
+        self.tenant_id = validate_tenant_id(tenant_id)
         self.subject_tree = get_subject_tree_store(project=project, datasource_id=self.datasource_id)
 
     def batch_store(
@@ -1284,7 +1284,10 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
             self._ensure_table_ready()
 
             # Build where clause
-            conditions = [eq(SUBJECT_ID_COLUMN_NAME, node_id), datasource_condition(self.datasource_id, self.tenant_id, tenant_column=True)]
+            conditions = [
+                eq(SUBJECT_ID_COLUMN_NAME, node_id),
+                datasource_condition(self.datasource_id, self.tenant_id, tenant_column=True),
+            ]
 
             if name:
                 conditions.append(eq(NAME_COLUMN_NAME, name))

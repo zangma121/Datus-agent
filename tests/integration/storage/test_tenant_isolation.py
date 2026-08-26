@@ -52,7 +52,9 @@ class TestKnowledgeBaseTenantIsolation:
         assert hits_own, "own tenant must see its rows"
 
         assert rag_other.search_metrics("org_a_revenue") == []
-        assert rag_default.search_metrics("org_a_revenue") == []
+        # Exact-name check: the default tenant may see its own rows from other
+        # tests (module-scoped shared storage), but never org-a's row.
+        assert [m for m in rag_default.search_metrics("org_a_revenue") if m["name"] == "org_a_revenue"] == []
 
     def test_default_tenant_keeps_legacy_storage_key(self, base_config, tmp_path):
         rag_default = MetricRAG(base_config, datasource_id="iso_ds")

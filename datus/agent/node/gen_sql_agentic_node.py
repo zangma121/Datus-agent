@@ -10,6 +10,7 @@ SQL generation with support for limited context, enhanced template variables,
 and flexible configuration through agent.yml.
 """
 
+import json
 from typing import Any, Dict, Literal, Optional, Union
 
 from datus.agent.node.agentic_node import AgenticNode
@@ -898,8 +899,6 @@ class GenSQLAgenticNode(AgenticNode):
         execute_sql returned rows). The executed statement is the agent's
         best-effort answer, so recover it rather than failing the task.
         """
-        import json as _json
-
         for stream_action in reversed(action_history_manager.get_actions()):
             if stream_action.action_type != "execute_sql" or stream_action.status != ActionStatus.SUCCESS:
                 continue
@@ -910,8 +909,8 @@ class GenSQLAgenticNode(AgenticNode):
             args: dict = {}
             if isinstance(raw_args, str):
                 try:
-                    args = _json.loads(raw_args)
-                except _json.JSONDecodeError:
+                    args = json.loads(raw_args)
+                except json.JSONDecodeError:
                     continue
             elif isinstance(raw_args, dict):
                 args = raw_args

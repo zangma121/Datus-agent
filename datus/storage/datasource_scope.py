@@ -39,7 +39,7 @@ DEFAULT_TENANT_ID = "default"
 _TENANT_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
-def _validate_tenant_id(tenant_id: Optional[str]) -> Optional[str]:
+def validate_tenant_id(tenant_id: Optional[str]) -> Optional[str]:
     resolved = str(tenant_id or "").strip()
     if not resolved or resolved == DEFAULT_TENANT_ID:
         return None
@@ -58,18 +58,18 @@ def _validate_tenant_id(tenant_id: Optional[str]) -> Optional[str]:
 def resolve_tenant_id(
     agent_config: "AgentConfig",
     tenant_id: Optional[str] = None,
-) -> str:
-    """Return the tenant id for scoped storage (``default`` when unset).
+) -> Optional[str]:
+    """Return the normalized tenant id for scoped storage (``None`` = default).
 
     Precedence: explicit argument -> ``agent_config.tenant_id`` (set on
     per-tenant config clones by the service cache) -> ``default``.
     """
-    if tenant_id is not None and str(tenant_id).strip():
-        resolved = _validate_tenant_id(tenant_id)
-        return resolved or DEFAULT_TENANT_ID
+    if isinstance(tenant_id, str) and tenant_id.strip():
+        return validate_tenant_id(tenant_id)
     configured = getattr(agent_config, "tenant_id", None)
-    resolved = _validate_tenant_id(configured)
-    return resolved or DEFAULT_TENANT_ID
+    if isinstance(configured, str) and configured.strip():
+        return validate_tenant_id(configured)
+    return None
 
 
 def resolve_datasource_id(agent_config: "AgentConfig", datasource_id: Optional[str] = None) -> str:
@@ -96,7 +96,7 @@ def datasource_condition(datasource_id: str, tenant_id: Optional[str] = None, *,
     """
 
     condition: Node = eq(DATASOURCE_ID_COLUMN, datasource_id)
-    tenant = _validate_tenant_id(tenant_id)
+    tenant = validate_tenant_id(tenant_id)
     if tenant_column:
         # Default-tenant rows and legacy rows carry '' in tenant_id, so the
         # equality also excludes foreign-tenant rows from default reads.
@@ -109,7 +109,7 @@ def datasource_condition(datasource_id: str, tenant_id: Optional[str] = None, *,
 def tenant_condition(tenant_id: Optional[str]) -> Optional[Node]:
     """Build the tenant scope condition, or ``None`` for the default tenant."""
 
-    tenant = _validate_tenant_id(tenant_id)
+    tenant = validate_tenant_id(tenant_id)
     if tenant is None:
         return None
     # ``*`` is the conditions library's wildcard (converted to SQL ``%``);
@@ -142,7 +142,7 @@ def build_storage_key(datasource_id: str, business_id: Any, tenant_id: Optional[
             ErrorCode.STORAGE_INVALID_ARGUMENT,
             message_args={"error_message": "business id is required to build storage_key"},
         )
-    tenant = _validate_tenant_id(tenant_id)
+    tenant = validate_tenant_id(tenant_id)
     datasource = str(datasource_id or "").strip()
     if tenant is not None:
         return f"{tenant}:{datasource}:{row_id}"
