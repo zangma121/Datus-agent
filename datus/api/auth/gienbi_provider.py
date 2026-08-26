@@ -29,6 +29,7 @@ from fastapi import Request
 
 from datus.api.auth.context import AppContext
 from datus.api.auth.provider import EvictCallback
+from datus.api.constants import USER_ID_PATTERN
 from datus.utils.exceptions import DatusException, ErrorCode
 from datus.utils.loggings import get_logger
 
@@ -41,7 +42,7 @@ HEADER_GIENBI_CUBE_TOKEN = "X-GienBI-CubeToken"
 
 # Same character policy as the open-source user_id header: values end up in
 # filesystem paths (session directories) and storage keys.
-_GIENBI_ID_PATTERN = re.compile(r"^[A-Za-z0-9_-]+$")
+_GIENBI_ID_PATTERN = USER_ID_PATTERN
 
 # chat2agent/Java CubeHttpUtils convention: metaOrgId = orgId + "A".
 _CUBE_META_ORG_SUFFIX = "A"
@@ -54,9 +55,9 @@ def _cube_org_id(org_id: str) -> str:
 class GienBIAuthProvider:
     """Map trusted GienBI gateway headers onto ``AppContext``.
 
-    ``multi_tenant`` mirrors ``agent.multi_tenant`` from the agent config and
-    is injected by the provider loader; the provider itself never reads
-    configuration so it stays trivially testable.
+    ``multi_tenant`` comes from ``api.auth_provider.kwargs.multi_tenant`` in
+    agent.yml, or is forced on by the loader when the deployment-level
+    ``api.multi_tenant`` switch is set.
     """
 
     def __init__(self, multi_tenant: bool = False) -> None:
@@ -66,7 +67,7 @@ class GienBIAuthProvider:
     async def authenticate(self, request: Request) -> AppContext:
         org_id = self._read_id(request, HEADER_GIENBI_ORG_ID)
         user_id = self._read_id(request, HEADER_GIENBI_USER_ID)
-        agent_id = self._read_id(request, HEADER_GIENBI_AGENT_ID, optional=True)
+        agent_id = self._read_id(request, HEADER_GIENBI_AGENT_ID)
         cube_token = self._read_optional(request, HEADER_GIENBI_CUBE_TOKEN)
 
         if self.multi_tenant and (not org_id or not user_id):
@@ -111,7 +112,7 @@ class GienBIAuthProvider:
         candidate = raw.strip()
         return candidate or None
 
-    def _read_id(self, request: Request, header: str, optional: bool = False) -> str | None:
+    def _read_id(self, request: Request, header: str) -> str | None:
         candidate = self._read_optional(request, header)
         if candidate is None:
             return None

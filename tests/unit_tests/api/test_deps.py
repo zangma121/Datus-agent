@@ -301,3 +301,37 @@ class TestGetScopedSubAgent:
         detail = str(excinfo.value.detail)
         assert "analyst" not in detail
         assert "auditor" not in detail
+
+
+@pytest.mark.asyncio
+class TestMultiTenantFailClosedMapping:
+    async def test_missing_identity_maps_to_http_400(self):
+        """A provider rejection (multi-tenant fail-closed) surfaces as 400."""
+        from datus.api.auth.gienbi_provider import GienBIAuthProvider
+
+        provider = GienBIAuthProvider(multi_tenant=True)
+        cache = MagicMock(spec=DatusServiceCache)
+        init_deps(provider, cache, datasource="default")
+
+        request = MagicMock()
+        request.headers = {}
+
+        with pytest.raises(HTTPException) as exc_info:
+            await get_datus_service(request)
+        assert exc_info.value.status_code == 400
+
+    async def test_single_tenant_missing_identity_is_anonymous(self):
+        """Same provider, multi_tenant off: anonymous context, no 400."""
+        from datus.api.auth.gienbi_provider import GienBIAuthProvider
+
+        provider = GienBIAuthProvider(multi_tenant=False)
+        cache = MagicMock(spec=DatusServiceCache)
+        init_deps(provider, cache, datasource="default")
+
+        request = MagicMock()
+        request.headers = {}
+
+        cache.get_or_create = AsyncMock(return_value=MagicMock())
+        service = await get_datus_service(request)
+        assert service is not None
+        assert request.state.app_context.tenant_id is None

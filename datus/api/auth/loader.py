@@ -30,7 +30,10 @@ def load_auth_provider(api_config: Optional[Dict[str, Any]], datasource: str) ->
     spec = (api_config or {}).get("auth_provider") or {}
     class_path = spec.get("class")
     if not class_path:
-        return HeaderContextProvider()
+        provider: AuthProvider = HeaderContextProvider()
+        if (api_config or {}).get("multi_tenant"):
+            _escalate_multi_tenant(provider)
+        return provider
 
     normalized = class_path.replace(":", ".")
     module_name, _, class_name = normalized.rpartition(".")
@@ -71,5 +74,31 @@ def load_auth_provider(api_config: Optional[Dict[str, Any]], datasource: str) ->
             message=f"{class_path} does not implement the AuthProvider protocol",
         )
 
+    if (api_config or {}).get("multi_tenant"):
+        instance = _escalate_multi_tenant(instance)
+
     logger.info(f"Loaded custom AuthProvider: {class_path}")
     return instance
+
+
+def _escalate_multi_tenant(provider: AuthProvider) -> AuthProvider:
+    """Enforce the deployment-level ``api.multi_tenant`` switch.
+
+    A multi-tenant deployment must fail closed on missing identity. Providers
+    that support the switch get it forced on (so omitting the per-provider
+    kwarg cannot silently degrade to anonymous contexts); providers that
+    cannot carry tenant identity are rejected at startup instead of being
+    discovered as fail-open on the first anonymous request.
+    """
+    multi_tenant_getter = getattr(provider, "multi_tenant", None)
+    if multi_tenant_getter is None:
+        raise DatusException(
+            ErrorCode.COMMON_CONFIG_ERROR,
+            message=(
+                "api.multi_tenant is enabled but auth provider "
+                f"{type(provider).__name__} cannot carry tenant identity; "
+                "configure a tenant-aware provider such as GienBIAuthProvider."
+            ),
+        )
+    provider.multi_tenant = True
+    return provider

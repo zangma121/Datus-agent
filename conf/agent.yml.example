@@ -533,6 +533,10 @@ agent:
     #   class: datus.api.auth.gienbi_provider:GienBIAuthProvider
     #   kwargs:
     #     multi_tenant: true
+    # Deployment-level switch: with ``multi_tenant: true`` the loader forces
+    # the auth provider's fail-closed mode on (missing org/user identity →
+    # 400) and rejects providers that cannot carry tenant identity.
+    # multi_tenant: true
 
   autocomplete:
     # After switching / adding / editing a datasource, refresh the LanceDB

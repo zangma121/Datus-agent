@@ -113,3 +113,27 @@ def test_loads_gienbi_provider_with_multi_tenant_kwargs():
 
     assert isinstance(provider, GienBIAuthProvider)
     assert provider.multi_tenant is True
+
+
+def test_multi_tenant_flag_escalates_gienbi_provider_fail_closed():
+    """api.multi_tenant=true forces the provider's fail-closed mode on,
+    so omitting kwargs.multi_tenant cannot silently degrade to anonymous."""
+    provider = load_auth_provider(
+        {
+            "multi_tenant": True,
+            "auth_provider": {"class": "datus.api.auth.gienbi_provider:GienBIAuthProvider"},
+        },
+        datasource="default",
+    )
+    assert provider.multi_tenant is True
+
+
+def test_multi_tenant_with_default_provider_fails_startup():
+    """A multi-tenant deployment must not run on the anonymous default provider."""
+    with pytest.raises(DatusException):
+        load_auth_provider({"multi_tenant": True}, datasource="default")
+
+
+def test_multi_tenant_absent_keeps_default_provider():
+    provider = load_auth_provider({"multi_tenant": False}, datasource="default")
+    assert isinstance(provider, HeaderContextProvider)

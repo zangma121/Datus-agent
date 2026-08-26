@@ -61,11 +61,14 @@
   头齐全 → context 正确；头缺失 + 多租户开 → 拒绝；头缺失 + 多租户关 → 匿名。
 
 ### T1.3 multi_tenant 开关与 fail-closed
-- **文件**：`datus/configuration/agent_config.py`（`agent.multi_tenant: bool`）、
-  `datus/api/deps.py`（校验点）
-- **做**：`multi_tenant: true` 时 tenant/user 缺失返回 400（复用现有 400 路径）；
-  默认 `false` 保持单租户行为完全不变。
-- **验收**：`unit_tests/api/` 新增多租户开关用例（开/关各一）。
+- **实现形态（评审后修订）**：不新增 AgentConfig 字段。部署级开关
+  `api.multi_tenant: true`（agent.yml 的 api 段）由
+  `datus/api/auth/loader.py` 的 `_escalate_multi_tenant()` 强制执行——
+  已配置的 GienBI provider 未显式开 fail-closed 则自动升级为开；配了
+  multi_tenant 却用无法携带租户身份的默认 Header provider 则启动即
+  `COMMON_CONFIG_ERROR`。DatusException→400 的映射在 `deps.py:64-67`（存量）。
+- **验收**：`unit_tests/api/test_loader.py`（开关升降级）+
+  `unit_tests/api/test_deps.py`（400 映射/匿名兼容）✅ 已实现。
 
 ### T1.4 Provider 注册与配置
 - **文件**：`datus/api/auth/loader.py`（或现有 provider 装载处）、

@@ -11,8 +11,10 @@ class AppContext:
     """Request context with optional agent configuration.
 
     - ``tenant_id``: first-class tenant boundary (GienBI ``orgId``). ``None``
-      means the single-tenant default; storage keys, session directories and
-      the service cache all two-level key on ``(tenant_id, project_id)``.
+      means the single-tenant default. Storage keys, session directories and
+      the service cache are being migrated to two-level key on
+      ``(tenant_id, project_id)`` (datus-agent-cube M1b); until then they key
+      on ``project_id`` alone.
     - ``user_id``: identifier from the auth provider; ``None`` means anonymous.
       Used as ``SessionManager.scope`` to isolate sessions per user.
     - ``project_id``: optional project identifier; ``None`` means the single
