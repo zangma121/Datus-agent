@@ -1046,6 +1046,37 @@ class SemanticTools:
         )
 
         try:
+            # Metric-level policy gate (M4): plugins may filter the metric
+            # list or refuse the read outright (missing tenant identity).
+            from datus.tools.policy_runtime import PolicyRuntime
+
+            policy_context = getattr(self.agent_config, "policy_context", None)
+            policy_context = dict(policy_context) if isinstance(policy_context, dict) else {}
+            datasource = getattr(adapter, "datasource", "") or ""
+            decision = PolicyRuntime(self.agent_config).before_metric_read(
+                metrics, datasource=datasource, policy_context=policy_context
+            )
+            # The gienbi plugin returns plain dicts; normalize for uniform access.
+            if isinstance(decision, dict):
+                from types import SimpleNamespace
+
+                decision = SimpleNamespace(**decision)
+            if not decision.allowed:
+                return FuncToolResult(
+                    success=0,
+                    error=f"Metric query denied by policy: {decision.reason or 'no reason given'}",
+                )
+            if not decision.allowed_metrics:
+                denied_names = ", ".join(d.get("metric", "?") for d in decision.denied) or "all requested metrics"
+                return FuncToolResult(
+                    success=0,
+                    error=f"No permitted metrics remain after policy filtering (denied: {denied_names}).",
+                )
+            if decision.allowed_metrics != metrics:
+                denied_names = ", ".join(d.get("metric", "?") for d in decision.denied)
+                logger.info(f"Policy filtered metrics for query_metrics: {denied_names}")
+                metrics = decision.allowed_metrics
+
             # Execute query via adapter
             adapter_query_kwargs = {
                 "metrics": metrics,

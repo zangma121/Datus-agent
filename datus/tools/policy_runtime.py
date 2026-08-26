@@ -46,6 +46,15 @@ class PolicyValidationResult:
 
 
 @dataclass(frozen=True)
+class MetricReadDecision:
+    allowed: bool
+    allowed_metrics: list[str] = field(default_factory=list)
+    denied: list[dict] = field(default_factory=list)
+    reason: Optional[str] = None
+    applied_policies: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class SqlReadDecision:
     allowed: bool
     sql: Optional[str] = None
@@ -108,6 +117,51 @@ class PolicyRuntime:
             if not decision.allowed:
                 return replace(decision, reason=_explain(context, decision.reason))
         return PolicyValidationResult(allowed=True)
+
+    def before_metric_read(
+        self,
+        metric_names: list,
+        *,
+        datasource: str,
+        policy_context: Optional[Dict[str, Any]],
+    ) -> MetricReadDecision:
+        """Compose metric-level read decisions across plugins.
+
+        Each plugin filters the metric list; the returned decision carries
+        the intersection of what every plugin allows plus per-metric denial
+        reasons so callers can surface *why* a metric disappeared. A plugin
+        rejecting outright (``allowed=False``) stops the chain — that is a
+        refusal to answer at all (e.g. missing identity), not a filter.
+        """
+        context = self._normalize_context(policy_context)
+        remaining = list(metric_names)
+        denied: list[dict] = []
+        applied: list[str] = []
+        for plugin_name, runtime in self._runtimes:
+            hook = getattr(runtime, "before_metric_read", None)
+            if not callable(hook):
+                continue
+            raw = self._invoke(
+                plugin_name,
+                "before_metric_read",
+                hook,
+                remaining,
+                datasource=datasource,
+                policy_context=context,
+            )
+            decision = self._metric_decision(plugin_name, raw, remaining)
+            if not decision.allowed:
+                return replace(decision, reason=_explain(context, decision.reason))
+            # Intersect, not replace: a plugin's allowed_metrics is its own
+            # full view; the chain keeps only what every plugin allows.
+            remaining = [m for m in remaining if m in decision.allowed_metrics]
+            for entry in decision.denied:
+                if entry not in denied:
+                    denied.append(entry)
+            applied.extend(decision.applied_policies)
+        return MetricReadDecision(
+            allowed=True, allowed_metrics=remaining, denied=denied, applied_policies=applied
+        )
 
     def before_sql_read(
         self,
@@ -214,6 +268,45 @@ class PolicyRuntime:
         return PolicyValidationResult(
             allowed=cls._allowed(plugin_name, raw),
             reason=getattr(raw, "reason", None),
+        )
+
+    @classmethod
+    def _metric_decision(cls, plugin_name: str, raw: Any, current_metrics: list) -> MetricReadDecision:
+        def field(name: str, default: Any = None) -> Any:
+            if isinstance(raw, dict):
+                value = raw.get(name, default)
+            else:
+                value = getattr(raw, name, default)
+            return value
+
+        allowed_raw = field("allowed")
+        if not isinstance(allowed_raw, bool):
+            raise DatusException(
+                ErrorCode.COMMON_CONFIG_ERROR,
+                message=f"Policy runtime {plugin_name!r} returned a decision without boolean allowed",
+            )
+        allowed = allowed_raw
+        allowed_metrics = field("allowed_metrics")
+        if allowed and not isinstance(allowed_metrics, list):
+            raise DatusException(
+                ErrorCode.COMMON_CONFIG_ERROR,
+                message=(
+                    f"Policy runtime {plugin_name!r} returned no allowed_metrics list; "
+                    "refusing to widen a metric read"
+                ),
+            )
+        denied = field("denied") or []
+        if not isinstance(denied, list):
+            raise DatusException(
+                ErrorCode.COMMON_CONFIG_ERROR,
+                message=f"Policy runtime {plugin_name!r} returned invalid denied list",
+            )
+        return MetricReadDecision(
+            allowed=allowed,
+            allowed_metrics=current_metrics if allowed_metrics is None else allowed_metrics,
+            denied=denied,
+            reason=field("reason"),
+            applied_policies=cls._policy_names(plugin_name, raw),
         )
 
     @classmethod

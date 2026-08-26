@@ -326,3 +326,65 @@ class TestDenialExplanation:
         rt = runtime_with(FakeRuntime(), monkeypatch)
 
         assert rt.validate_context(self.DENIED).allowed is True
+
+
+class MetricFakeRuntime:
+    """before_metric_read-shaped plugin for the T4.4 composition tests."""
+
+    def __init__(self, allowed_metrics=None, denied=None, allowed=True, reason=None):
+        self.allowed_metrics = allowed_metrics
+        self.denied = denied or []
+        self.allowed = allowed
+        self.reason = reason
+        self.calls = []
+
+    def before_metric_read(self, metric_names, *, datasource, policy_context):
+        self.calls.append((list(metric_names), datasource))
+        if not self.allowed:
+            return {"allowed": False, "reason": self.reason}
+        return {"allowed": True, "allowed_metrics": self.allowed_metrics, "denied": self.denied}
+
+
+def test_metric_read_filters_by_plugin_decision(monkeypatch):
+    fake = MetricFakeRuntime(allowed_metrics=["m1"], denied=[{"metric": "m2", "reason": "no VIEW"}])
+    monkeypatch.setattr(
+        "datus.tools.policy_runtime.collect_plugin_policy_runtime_factories",
+        lambda active: {"gienbi": lambda profile: fake},
+    )
+    runtime = PolicyRuntime(config())
+    decision = runtime.before_metric_read(["m1", "m2"], datasource="bank", policy_context={})
+    assert decision.allowed
+    assert decision.allowed_metrics == ["m1"]
+    assert decision.denied == [{"metric": "m2", "reason": "no VIEW"}]
+
+
+def test_metric_read_denial_stops_and_explains(monkeypatch):
+    fake = MetricFakeRuntime(allowed=False, reason="missing identity")
+    monkeypatch.setattr(
+        "datus.tools.policy_runtime.collect_plugin_policy_runtime_factories",
+        lambda active: {"gienbi": lambda profile: fake},
+    )
+    runtime = PolicyRuntime(config())
+    decision = runtime.before_metric_read(["m1"], datasource="bank", policy_context={})
+    assert not decision.allowed
+    assert "missing identity" in (decision.reason or "")
+
+
+def test_metric_read_intersects_across_plugins(monkeypatch):
+    first = MetricFakeRuntime(allowed_metrics=["m1", "m2"])
+    second = MetricFakeRuntime(allowed_metrics=["m1", "m3"])
+    monkeypatch.setattr(
+        "datus.tools.policy_runtime.collect_plugin_policy_runtime_factories",
+        lambda active: {"a": lambda p: first, "b": lambda p: second},
+    )
+    runtime = PolicyRuntime(config())
+    decision = runtime.before_metric_read(["m1", "m2", "m3"], datasource="bank", policy_context={})
+    assert decision.allowed_metrics == ["m1"]
+
+
+def test_metric_read_without_plugins_passes_through(monkeypatch):
+    monkeypatch.setattr("datus.tools.policy_runtime.collect_plugin_policy_runtime_factories", lambda active: {})
+    runtime = PolicyRuntime(config())
+    decision = runtime.before_metric_read(["m1", "m2"], datasource="bank", policy_context={})
+    assert decision.allowed
+    assert decision.allowed_metrics == ["m1", "m2"]

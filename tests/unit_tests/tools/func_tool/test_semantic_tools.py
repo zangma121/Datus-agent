@@ -2087,3 +2087,57 @@ class TestCompressorModelName:
         assert "original_rows" not in envelope
         assert "compressed_data" not in envelope
         assert "compression_type" not in envelope
+
+
+class TestQueryMetricsPolicyGate:
+    """T4.4: before_metric_read runs before the adapter call.
+
+    Denied metrics are removed (and reported); an outright plugin refusal
+    (missing identity) blocks the read entirely.
+    """
+
+    def _patch_runtime(self, monkeypatch, decision):
+        from types import SimpleNamespace
+
+        fake = SimpleNamespace(
+            before_metric_read=lambda metrics, *, datasource, policy_context: decision
+        )
+        monkeypatch.setattr(
+            "datus.tools.policy_runtime.PolicyRuntime",
+            lambda config: fake,
+        )
+
+    def test_denied_metrics_filtered_before_adapter(self, semantic_tools, mock_adapter, monkeypatch):
+        self._patch_runtime(
+            monkeypatch,
+            {
+                "allowed": True,
+                "allowed_metrics": ["m1"],
+                "denied": [{"metric": "m2", "reason": "no VIEW permission"}],
+            },
+        )
+        query_result = QueryResult(columns=["a"], data=[], metadata={})
+        with patch("datus.tools.func_tool.semantic_tools._run_async", return_value=query_result):
+            result = semantic_tools.query_metrics(metrics=["m1", "m2"])
+
+        assert result.success == 1
+        called_metrics = mock_adapter.query_metrics.call_args.kwargs.get("metrics")
+        assert called_metrics == ["m1"]
+
+    def test_plugin_refusal_blocks_query(self, semantic_tools, mock_adapter, monkeypatch):
+        self._patch_runtime(
+            monkeypatch,
+            {"allowed": False, "reason": "missing GienBI identity", "allowed_metrics": [], "denied": []},
+        )
+        result = semantic_tools.query_metrics(metrics=["m1"])
+        assert result.success == 0
+        mock_adapter.query_metrics.assert_not_called()
+
+    def test_all_metrics_denied_is_an_error(self, semantic_tools, mock_adapter, monkeypatch):
+        self._patch_runtime(
+            monkeypatch,
+            {"allowed": True, "allowed_metrics": [], "denied": [{"metric": "m1", "reason": "no VIEW"}]},
+        )
+        result = semantic_tools.query_metrics(metrics=["m1"])
+        assert result.success == 0
+        mock_adapter.query_metrics.assert_not_called()

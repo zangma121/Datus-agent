@@ -1,0 +1,7 @@
+name: gienbi_policy
+description: >
+  GienBI permission model as a Datus policy runtime: metric-level VIEW
+  gating (before_metric_read), row-level filters (before_sql_read, cube
+  filter injection), and column masking (after_read_result), reading the
+  shared GienBI MySQL tables with a per-user TTL cache.
+policy_runtime: datus_gienbi_policy.runtime:create_runtime
