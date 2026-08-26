@@ -111,10 +111,19 @@
   首次打开表时自动补列回填 `''`。剩余工作：无（如后续发现无列 store 需要
   显式迁移再启用本任务）。
 
-### T1.9 隔离测试套件（阶段验收）
-- **文件**：新建 `tests/integration/test_tenant_isolation.py`
-- **做**：在 T1.5 的单级隔离测试之上，补会话/缓存维度的集成用例（依赖
-  T1.6 完成后收口）。
+### T1.9 隔离测试套件（阶段验收）✅ 已实现（提交 c56a49ef + 评审修复 1c1624ce）
+- `tests/integration/storage/test_tenant_isolation.py`：真实接线端到端
+  （配置盖章 → MetricRAG → 注册表 → 行隔离）+ 会话目录分层 + fail-closed 链。
+- **M1b 双轴评审已做**，关键修复：5 个未穿线的 KB store
+  （reference_sql/reference_template/semantic_dataset/schema_metadata/kb_retrieval）
+  全部穿线；kb_retrieval FTS 表加 tenant_id 列；保留字 "default" org 拒收。
+- **遗留跟进项（评审发现，暂缓）**：
+  1. 设计 2.2 第 4 行"同一 project 名在不同 tenant 下各自解析配置目录"未实现
+     ——与每租户配置克隆深度耦合，排到 M3（engine 切换涉及配置解析时一并做）；
+  2. SubjectTreeStore（主题树，非 embedding 表）未按租户隔离——泄的是业务
+    分类结构而非行数据，排到 M4 之前评估必要性；
+  3. kb_retrieval 的 facts/docs 表加了 tenant_id 列，存量表需重建
+    （build-kb 即可），部署注意。
 
 ---
 
