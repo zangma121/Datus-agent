@@ -2732,3 +2732,142 @@ class TestGenSQLSystemPromptToolContext:
             tool_names = node._get_available_tool_names()
 
         assert tool_names == ["describe_table", "search_reference_template"]
+
+
+class TestCollectFinalResponseExecuteSqlSalvage:
+    """SQL recovery when the model answers conversationally (no summary_report).
+
+    Benchmark smoke (bird_dev tasks 0/2, 2026-08-26): the model ran
+    execute_sql successfully but finished with a plain markdown response and
+    no summary_report action, so result.sql stayed empty and evaluation
+    failed with NODE_NO_SQL_CONTEXT. The SQL it executed is still in the
+    action history — recover it from the last successful execute_sql call.
+    """
+
+    def _node(self, real_agent_config, mock_llm_create):
+        from datus.agent.node.gen_sql_agentic_node import GenSQLAgenticNode
+        from datus.configuration.node_type import NodeType
+
+        return GenSQLAgenticNode(
+            node_id="salvage_test",
+            description="test",
+            node_type=NodeType.TYPE_GEN_SQL,
+            agent_config=real_agent_config,
+            node_name="gen_sql",
+        )
+
+    def _history(self, *actions):
+        from datus.schemas.action_history import ActionHistory, ActionHistoryManager, ActionRole, ActionStatus
+
+        mgr = ActionHistoryManager()
+        for i, (role, action_type, status, input_data, output, messages) in enumerate(actions):
+            mgr.add_action(
+                ActionHistory(
+                    action_id=f"a{i}",
+                    role=role,
+                    action_type=action_type,
+                    status=status,
+                    messages=messages or "",
+                    input=input_data,
+                    output=output,
+                )
+            )
+        return mgr
+
+    def test_sql_recovered_from_last_successful_execute_sql(
+        self, real_agent_config, mock_llm_create
+    ):
+        from datus.schemas.action_history import ActionRole, ActionStatus
+
+        node = self._node(real_agent_config, mock_llm_create)
+        mgr = self._history(
+            (
+                ActionRole.ASSISTANT,
+                "response",
+                ActionStatus.SUCCESS,
+                None,
+                {"content": "Thinking: I have the schema, let me query."},
+                "think",
+            ),
+            (
+                ActionRole.TOOL,
+                "execute_sql",
+                ActionStatus.SUCCESS,
+                {
+                    "function_name": "execute_sql",
+                    "arguments": '{"database": "", "sql": "SELECT MAX(rate) FROM frpm"}',
+                },
+                {"data": [["1.0"]]},
+                "",
+            ),
+            (
+                ActionRole.ASSISTANT,
+                "response",
+                ActionStatus.SUCCESS,
+                None,
+                {"content": "The highest eligible free rate is 1.0 (100%)..."},
+                "final",
+            ),
+        )
+
+        response_content, sql_content = node._collect_final_response(mgr)
+        assert sql_content == "SELECT MAX(rate) FROM frpm"
+        assert response_content  # conversational answer preserved
+
+    def test_summary_report_still_wins_over_salvage(self, real_agent_config, mock_llm_create):
+        from datus.schemas.action_history import ActionRole, ActionStatus
+
+        node = self._node(real_agent_config, mock_llm_create)
+        mgr = self._history(
+            (
+                ActionRole.TOOL,
+                "execute_sql",
+                ActionStatus.SUCCESS,
+                {
+                    "function_name": "execute_sql",
+                    "arguments": '{"sql": "SELECT wrong FROM salvage_only"}',
+                },
+                {"data": []},
+                "",
+            ),
+            (
+                ActionRole.ASSISTANT,
+                "summary_report",
+                ActionStatus.SUCCESS,
+                None,
+                {"sql": "SELECT correct FROM summary", "markdown": "done"},
+                "",
+            ),
+        )
+
+        _, sql_content = node._collect_final_response(mgr)
+        assert sql_content == "SELECT correct FROM summary"
+
+    def test_failed_execute_sql_not_salvaged(self, real_agent_config, mock_llm_create):
+        from datus.schemas.action_history import ActionRole, ActionStatus
+
+        node = self._node(real_agent_config, mock_llm_create)
+        mgr = self._history(
+            (
+                ActionRole.TOOL,
+                "execute_sql",
+                ActionStatus.FAILED,
+                {
+                    "function_name": "execute_sql",
+                    "arguments": '{"sql": "SELECT broken"}',
+                },
+                {"error": "syntax error"},
+                "",
+            ),
+            (
+                ActionRole.ASSISTANT,
+                "response",
+                ActionStatus.SUCCESS,
+                None,
+                {"content": "Sorry, I could not run the query."},
+                "",
+            ),
+        )
+
+        _, sql_content = node._collect_final_response(mgr)
+        assert sql_content is None

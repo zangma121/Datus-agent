@@ -883,7 +883,46 @@ class GenSQLAgenticNode(AgenticNode):
             if extracted_output:
                 response_content = extracted_output
 
+        if not sql_content:
+            sql_content = self._salvage_sql_from_last_execute_sql(action_history_manager)
+
         return response_content, sql_content
+
+    @staticmethod
+    def _salvage_sql_from_last_execute_sql(action_history_manager: ActionHistoryManager) -> Optional[str]:
+        """Recover SQL from the last successful ``execute_sql`` tool call.
+
+        Weaker models sometimes finish with a conversational answer instead of
+        the structured summary_report, losing the SQL they already executed
+        (observed on bird_dev: node evaluated as NODE_NO_SQL_CONTEXT although
+        execute_sql returned rows). The executed statement is the agent's
+        best-effort answer, so recover it rather than failing the task.
+        """
+        import json as _json
+
+        for stream_action in reversed(action_history_manager.get_actions()):
+            if stream_action.action_type != "execute_sql" or stream_action.status != ActionStatus.SUCCESS:
+                continue
+            input_data = stream_action.input
+            if not isinstance(input_data, dict):
+                continue
+            raw_args = input_data.get("arguments")
+            args: dict = {}
+            if isinstance(raw_args, str):
+                try:
+                    args = _json.loads(raw_args)
+                except _json.JSONDecodeError:
+                    continue
+            elif isinstance(raw_args, dict):
+                args = raw_args
+            sql = args.get("sql")
+            if isinstance(sql, str) and sql.strip():
+                logger.info(
+                    "Recovered SQL from the last successful execute_sql action "
+                    "(model finished without a structured SQL submission)"
+                )
+                return sql
+        return None
 
 
 def prepare_template_context(
