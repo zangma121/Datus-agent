@@ -170,7 +170,16 @@
   storage_sync.py`），记录同步统计。
 - **验收**：mock 单测 + 与 storage_sync 的契约测试（同步计数正确）。
 
-### T2.6 集成测试（真实 Cube）
+### T2.6 集成测试（真实 Cube）✅ 已实现（提交 1403a63e）
+- 自包含 fixture：官方 cubejs/cube:latest + cubestore + postgres（orders 表）
+  组网；live 测试 5/5 通过（meta/维度/分组计数/dry_run/validate），按
+  CUBE_LIVE_URL/CUBE_LIVE_SECRET 门控，无环境自动跳过。
+- live 发现并修复：新版 Cube /sql 响应外层多包一层（两种格式都兼容）。
+- **T3.5 进度（精确记录）**：适配器侧端到端已通——bootstrap-kb
+  --from_adapter cube 从 live Cube 取出全部指标并送达 storage_sync；
+  卡点在本机 Lance 向量写入的内部错误（"Spill"，环境级、确定性复现、
+  与分支代码无关）。恢复时第一步：对该数据源切 kb.search.mode=fts 绕过
+  向量后端重试；多租户 cubeOrgId 路径仍需 GienBI bank 栈。
 - **做**：`tests/integration/test_cube_adapter_live.py`，标记 `@pytest.mark.
   integration`；用 GienBI dev Cube（`cubejs-bank` 容器，需带测试 org 的 model
   目录）。跑 list/query/sql 三条路径。
