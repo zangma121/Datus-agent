@@ -381,13 +381,15 @@ class AgenticNode(Node):
                 base_dir = str(get_path_manager(agent_config=cfg).sessions_dir)
             user_scope = getattr(self, "scope", None)
             session_subdir = getattr(self, "session_subdir", None)
+            # Per-tenant config clones carry tenant_id (deps._factory stamps it).
+            tenant_id = getattr(cfg, "tenant_id", None) if cfg is not None else None
 
             if session_subdir:
-                scoped_dir = SessionManager(session_dir=base_dir, scope=user_scope).session_dir
+                scoped_dir = SessionManager(session_dir=base_dir, scope=user_scope, tenant_id=tenant_id).session_dir
                 nested_dir = os.path.join(scoped_dir, session_subdir)
                 self._session_manager = SessionManager(session_dir=nested_dir, scope=None)
             else:
-                self._session_manager = SessionManager(session_dir=base_dir, scope=user_scope)
+                self._session_manager = SessionManager(session_dir=base_dir, scope=user_scope, tenant_id=tenant_id)
         return self._session_manager
 
     @property

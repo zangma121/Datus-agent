@@ -61,6 +61,8 @@ class ChatService:
 
         # Session directory: {home}/sessions — must match agent's path_manager.sessions_dir
         self._session_dir = self.agent_config.session_dir
+        # Per-tenant config clones carry tenant_id (stamped by deps._factory).
+        self._tenant_id = getattr(agent_config, "tenant_id", None)
 
     # ------------------------------------------------------------------
     # Streaming chat (thin proxy)
@@ -101,7 +103,7 @@ class ChatService:
 
     def session_exists(self, session_id: str, user_id: Optional[str] = None) -> bool:
         """Check if a session exists on disk."""
-        session_mgr = SessionManager(session_dir=self._session_dir, scope=user_id)
+        session_mgr = SessionManager(session_dir=self._session_dir, scope=user_id, tenant_id=self._tenant_id)
         return session_mgr.session_exists(session_id)
 
     def list_sessions(
@@ -158,7 +160,7 @@ class ChatService:
             # since a negative offset would silently slice from the tail.
             offset = max(offset, 0)
 
-            session_mgr = SessionManager(session_dir=self._session_dir, scope=user_id)
+            session_mgr = SessionManager(session_dir=self._session_dir, scope=user_id, tenant_id=self._tenant_id)
             all_ids = session_mgr.list_sessions(sort_by_modified=True)
             if subagent_id is not None:
                 all_ids = [sid for sid in all_ids if session_matches_agent(sid, subagent_id)]
@@ -205,7 +207,7 @@ class ChatService:
     def delete_session(self, session_id: str, user_id: Optional[str] = None) -> Result[ChatSessionData]:
         """Delete a session from disk."""
         try:
-            session_mgr = SessionManager(session_dir=self._session_dir, scope=user_id)
+            session_mgr = SessionManager(session_dir=self._session_dir, scope=user_id, tenant_id=self._tenant_id)
             if session_mgr.session_exists(session_id):
                 session_mgr.delete_session(session_id)
 
@@ -288,7 +290,7 @@ class ChatService:
         """Get chat history messages for a session."""
         try:
             # Use SessionManager to get messages from SQLite
-            session_manager = SessionManager(session_dir=self._session_dir, scope=user_id)
+            session_manager = SessionManager(session_dir=self._session_dir, scope=user_id, tenant_id=self._tenant_id)
             raw_messages = session_manager.get_session_messages(session_id)
 
             if not raw_messages:

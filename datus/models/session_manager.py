@@ -78,6 +78,7 @@ class SessionManager:
         session_dir: Optional[str] = None,
         scope: Optional[str] = None,
         *,
+        tenant_id: Optional[str] = None,
         path_manager: Optional["DatusPathManager"] = None,
         agent_config: Optional[Any] = None,
     ):
@@ -94,6 +95,11 @@ class SessionManager:
                 When None or empty, sessions are stored directly in {session_dir}/
                 (backward compatible with previous behavior).
                 Only alphanumerics, hyphens, and underscores are allowed.
+            tenant_id: Optional tenant boundary (GienBI org). Non-default
+                tenants get a ``{tenant_id}/`` layer between the session root
+                and the scope: {session_dir}/{tenant_id}/{scope}/. The default
+                tenant keeps the legacy layout, so existing sessions stay in
+                place without migration.
         """
         if session_dir and str(session_dir).strip():
             self.session_dir = str(session_dir)
@@ -101,6 +107,13 @@ class SessionManager:
             from datus.utils.path_manager import get_path_manager
 
             self.session_dir = str(get_path_manager(path_manager=path_manager, agent_config=agent_config).sessions_dir)
+
+        # Tenant layer first (tenant > project > user scope).
+        from datus.storage.datasource_scope import _validate_tenant_id
+
+        tenant = _validate_tenant_id(tenant_id)
+        if tenant is not None:
+            self.session_dir = os.path.join(self.session_dir, tenant)
 
         # Apply scope subdirectory only when explicitly provided
         if scope and scope.strip():

@@ -80,6 +80,13 @@ async def get_datus_service(request: Request) -> DatusService:
                 logger.error(f"Failed to load agent config for datasource '{_datasource}': {e}")
                 raise RuntimeError(f"Failed to load agent config: {e}") from e
 
+        # Stamp the tenant onto this request's config (per-tenant clone
+        # semantics): session directories and scoped stores key on it. The
+        # (tenant, project) cache key guarantees only this tenant's requests
+        # see this instance.
+        if tenant_key:
+            agent_config.tenant_id = ctx.tenant_id
+
         return DatusService(
             agent_config=agent_config,
             project_id=ctx.project_id or _DEFAULT_PROJECT_KEY,

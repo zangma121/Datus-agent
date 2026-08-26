@@ -2461,3 +2461,36 @@ class TestSystemPromptSnapshot:
         sm_custom.save_system_prompt_snapshot("chat_session_tmp", "P", dict(self.META))
         leftovers = [f for f in os.listdir(sm_custom.session_dir) if f.endswith(".tmp")]
         assert leftovers == []
+
+
+class TestTenantLayering:
+    """Session directory two-level keying (datus-agent-cube M1b T1.6).
+
+    Non-default tenants get a ``{tenant}/`` layer between the session root
+    and the user scope; the default tenant keeps the legacy layout so
+    existing sessions stay where they are.
+    """
+
+    def test_tenant_layer_inserted_between_root_and_scope(self, tmp_path):
+        mgr = SessionManager(session_dir=str(tmp_path / "sessions"), scope="alice", tenant_id="org-42")
+        assert mgr.session_dir == str(tmp_path / "sessions" / "org-42" / "alice")
+
+    def test_default_tenant_keeps_legacy_layout(self, tmp_path):
+        legacy = SessionManager(session_dir=str(tmp_path / "sessions"), scope="alice")
+        default = SessionManager(session_dir=str(tmp_path / "sessions"), scope="alice", tenant_id=None)
+        reserved = SessionManager(session_dir=str(tmp_path / "sessions"), scope="alice", tenant_id="default")
+
+        assert legacy.session_dir == str(tmp_path / "sessions" / "alice")
+        assert default.session_dir == legacy.session_dir
+        assert reserved.session_dir == legacy.session_dir
+
+    def test_invalid_tenant_rejected(self, tmp_path):
+        with pytest.raises(Exception):
+            SessionManager(session_dir=str(tmp_path / "sessions"), scope="alice", tenant_id="org/42")
+
+    def test_session_file_lands_in_tenant_dir(self, tmp_path):
+        mgr = SessionManager(session_dir=str(tmp_path / "sessions"), scope="alice", tenant_id="org-42")
+        session = mgr.create_session("sess-1")
+        session.add_items([("turn-1", "hello")])
+        db_files = list((tmp_path / "sessions" / "org-42" / "alice").glob("sess-1.db"))
+        assert len(db_files) == 1

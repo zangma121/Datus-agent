@@ -471,31 +471,31 @@ class TestChatServiceScopePropagation:
         fake = self._patched_sm()
         with patch("datus.api.services.chat_service.SessionManager", return_value=fake) as cls:
             chat_svc.session_exists("sid", user_id="alice")
-            cls.assert_called_once_with(session_dir=chat_svc._session_dir, scope="alice")
+            cls.assert_called_once_with(session_dir=chat_svc._session_dir, scope="alice", tenant_id=None)
 
     def test_list_sessions_passes_scope(self, chat_svc):
         fake = self._patched_sm()
         with patch("datus.api.services.chat_service.SessionManager", return_value=fake) as cls:
             chat_svc.list_sessions(user_id="bob")
-            cls.assert_called_once_with(session_dir=chat_svc._session_dir, scope="bob")
+            cls.assert_called_once_with(session_dir=chat_svc._session_dir, scope="bob", tenant_id=None)
 
     def test_delete_session_passes_scope(self, chat_svc):
         fake = self._patched_sm()
         with patch("datus.api.services.chat_service.SessionManager", return_value=fake) as cls:
             chat_svc.delete_session("sid", user_id="carol")
-            cls.assert_called_once_with(session_dir=chat_svc._session_dir, scope="carol")
+            cls.assert_called_once_with(session_dir=chat_svc._session_dir, scope="carol", tenant_id=None)
 
     def test_get_history_passes_scope(self, chat_svc):
         fake = self._patched_sm()
         with patch("datus.api.services.chat_service.SessionManager", return_value=fake) as cls:
             chat_svc.get_history("sid", user_id="dave")
-            cls.assert_called_once_with(session_dir=chat_svc._session_dir, scope="dave")
+            cls.assert_called_once_with(session_dir=chat_svc._session_dir, scope="dave", tenant_id=None)
 
     def test_none_user_id_falls_back_to_default_scope(self, chat_svc):
         fake = self._patched_sm()
         with patch("datus.api.services.chat_service.SessionManager", return_value=fake) as cls:
             chat_svc.list_sessions()
-            cls.assert_called_once_with(session_dir=chat_svc._session_dir, scope=None)
+            cls.assert_called_once_with(session_dir=chat_svc._session_dir, scope=None, tenant_id=None)
 
 
 @pytest.mark.asyncio
