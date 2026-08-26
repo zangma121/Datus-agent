@@ -13,7 +13,7 @@ from datus_storage_base.conditions import WhereExpr, and_, eq, in_, not_
 
 from datus.configuration.agent_config import AgentConfig
 from datus.storage.base import EmbeddingModel
-from datus.storage.datasource_scope import datasource_condition, resolve_datasource_id
+from datus.storage.datasource_scope import datasource_condition, resolve_datasource_id, resolve_tenant_id
 from datus.storage.fts import FtsField, FtsSpec
 from datus.storage.knowledge_provenance import enrich_metric_results, is_knowledge_provenance_enabled
 from datus.storage.subject_tree.store import BaseSubjectEmbeddingStore, base_schema_columns
@@ -199,7 +199,7 @@ class MetricStorage(BaseSubjectEmbeddingStore):
         if stale_duplicate_ids:
             self._delete_rows(
                 and_(
-                    datasource_condition(self.datasource_id),
+                    datasource_condition(self.datasource_id, getattr(self, "tenant_id", None), tenant_column=True),
                     in_("id", stale_duplicate_ids),
                 )
             )
@@ -222,7 +222,7 @@ class MetricStorage(BaseSubjectEmbeddingStore):
         if stale_duplicate_ids:
             self._delete_rows(
                 and_(
-                    datasource_condition(self.datasource_id),
+                    datasource_condition(self.datasource_id, getattr(self, "tenant_id", None), tenant_column=True),
                     in_("id", stale_duplicate_ids),
                 )
             )
@@ -275,7 +275,7 @@ class MetricStorage(BaseSubjectEmbeddingStore):
         names = {normalize_metric_name(metric.get("name")) for metric in metrics}
         fields = ["id", "name", *_METRIC_DEFINITION_FIELDS]
         existing_rows = self._search_all(
-            where=datasource_condition(self.datasource_id),
+            where=datasource_condition(self.datasource_id, getattr(self, "tenant_id", None), tenant_column=True),
             select_fields=fields,
         ).to_pylist()
 
@@ -687,18 +687,20 @@ class MetricRAG:
         self.agent_config = agent_config
         self.sub_agent_name = sub_agent_name
         self.datasource_id = resolve_datasource_id(agent_config, datasource_id)
+        self.tenant_id = resolve_tenant_id(agent_config)
         self._provenance_enabled = is_knowledge_provenance_enabled(agent_config)
         self.storage: MetricStorage = get_storage(
             MetricStorage,
             "metric",
             project=agent_config.project_name,
             datasource_id=self.datasource_id,
+            tenant_id=self.tenant_id,
         )
         self._sub_agent_filter = _build_sub_agent_filter(agent_config, sub_agent_name, self.storage, "metrics")
 
     def _sub_agent_conditions(self) -> List:
         """Build datasource and sub-agent filter conditions."""
-        conditions = [datasource_condition(self.datasource_id)]
+        conditions = [datasource_condition(self.datasource_id, getattr(self, "tenant_id", None), tenant_column=True)]
         if self._sub_agent_filter:
             conditions.append(self._sub_agent_filter)
         return conditions

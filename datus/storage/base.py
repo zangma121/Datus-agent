@@ -17,6 +17,8 @@ from datus_storage_base.vector.base import VectorDatabase, VectorTable
 from datus.storage.datasource_scope import (
     DATASOURCE_ID_COLUMN,
     STORAGE_KEY_COLUMN,
+    TENANT_ID_COLUMN,
+    _validate_tenant_id,
     build_storage_key,
     datasource_condition,
 )
@@ -91,9 +93,13 @@ class BaseEmbeddingStore(StorageBase):
         default_values: Optional[Dict[str, Any]] = None,
         scope_indices: Optional[List[str]] = None,
         datasource_scoped: bool = False,
+        tenant_id: Optional[str] = None,
     ):
         super().__init__(db=db)
         self.model = embedding_model
+        # Tenant scope for two-level keying (tenant > project); ``None`` is
+        # the default tenant and keeps the legacy storage_key format.
+        self._tenant_id = _validate_tenant_id(tenant_id)
         self.batch_size = embedding_model.batch_size
         self.table_name = f"{table_prefix}{table_name}" if table_prefix else table_name
         self.vector_source_name = vector_source_name
@@ -111,6 +117,8 @@ class BaseEmbeddingStore(StorageBase):
                 extra_scope_fields.append(pa.field(DATASOURCE_ID_COLUMN, pa.string()))
             if "id" in existing_names and STORAGE_KEY_COLUMN not in existing_names:
                 extra_scope_fields.append(pa.field(STORAGE_KEY_COLUMN, pa.string()))
+            if TENANT_ID_COLUMN not in existing_names:
+                extra_scope_fields.append(pa.field(TENANT_ID_COLUMN, pa.string()))
             if extra_scope_fields:
                 schema = pa.schema(list(schema) + extra_scope_fields)
         self._schema = schema
@@ -186,8 +194,13 @@ class BaseEmbeddingStore(StorageBase):
                 row.setdefault(k, v)
             if DATASOURCE_ID_COLUMN in schema_names:
                 row.setdefault(DATASOURCE_ID_COLUMN, "")
+            if TENANT_ID_COLUMN in schema_names:
+                row.setdefault(TENANT_ID_COLUMN, self._tenant_id or "")
             if STORAGE_KEY_COLUMN in schema_names and row.get("id") not in (None, ""):
-                row.setdefault(STORAGE_KEY_COLUMN, build_storage_key(row.get(DATASOURCE_ID_COLUMN, ""), row["id"]))
+                row.setdefault(
+                    STORAGE_KEY_COLUMN,
+                    build_storage_key(row.get(DATASOURCE_ID_COLUMN, ""), row["id"], tenant_id=self._tenant_id),
+                )
         return data
 
     def _scope_column_migration_exprs(self) -> Dict[str, str]:
@@ -201,6 +214,8 @@ class BaseEmbeddingStore(StorageBase):
             exprs[DATASOURCE_ID_COLUMN] = "''"
         if STORAGE_KEY_COLUMN in schema_names and "id" in schema_names:
             exprs[STORAGE_KEY_COLUMN] = "'legacy:' || id"
+        if TENANT_ID_COLUMN in schema_names:
+            exprs[TENANT_ID_COLUMN] = "''"
         return exprs
 
     def _ensure_persisted_scope_columns(self) -> None:
@@ -314,7 +329,7 @@ class BaseEmbeddingStore(StorageBase):
                     "error_message": f"table '{self.table_name}' is not datasource-scoped",
                 },
             )
-        self._delete_rows(datasource_condition(datasource_id))
+        self._delete_rows(datasource_condition(datasource_id, self._tenant_id, tenant_column=True))
 
     def _ensure_table(self, schema: Optional[pa.Schema] = None):
         if self.db.table_exists(self.table_name):

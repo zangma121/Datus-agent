@@ -17,8 +17,10 @@ from datus_storage_base.rdb.base import ColumnDef, IndexDef, TableDefinition, Un
 from datus.storage import BaseEmbeddingStore
 from datus.storage.datasource_scope import (
     DATASOURCE_ID_COLUMN,
+    TENANT_ID_COLUMN,
     STORAGE_KEY_COLUMN,
     build_storage_key,
+    _validate_tenant_id,
     datasource_condition,
 )
 from datus.storage.embedding_models import EmbeddingModel
@@ -730,6 +732,7 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
         # Falls back to the active path_manager for callers that bypass the registry.
         project = kwargs.pop("project", None)
         datasource_id = kwargs.pop("datasource_id", "")
+        tenant_id = kwargs.pop("tenant_id", None)
         kwargs.setdefault("datasource_scoped", True)
 
         super().__init__(
@@ -740,6 +743,7 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
             vector_source_name=vector_source_name,
             vector_column_name=vector_column_name,
             unique_columns=unique_columns,
+            tenant_id=tenant_id,
             **kwargs,
         )
 
@@ -751,6 +755,9 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
             project = get_path_manager().project_name
 
         self.datasource_id = str(datasource_id or "")
+        # Normalize so the reserved "default" tenant behaves identically to
+        # unset (legacy '' column value, unprefixed storage_key).
+        self.tenant_id = _validate_tenant_id(tenant_id)
         self.subject_tree = get_subject_tree_store(project=project, datasource_id=self.datasource_id)
 
     def batch_store(
@@ -783,8 +790,11 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
                 processed_item = item.copy()
                 processed_item[SUBJECT_ID_COLUMN_NAME] = subject_node_id
                 processed_item[DATASOURCE_ID_COLUMN] = self.datasource_id
+                processed_item[TENANT_ID_COLUMN] = self.tenant_id or ""
                 if processed_item.get("id") not in (None, ""):
-                    processed_item[STORAGE_KEY_COLUMN] = build_storage_key(self.datasource_id, processed_item["id"])
+                    processed_item[STORAGE_KEY_COLUMN] = build_storage_key(
+                        self.datasource_id, processed_item["id"], tenant_id=self.tenant_id
+                    )
                 processed_item.pop(SUBJECT_PATH_COLUMN_NAME, None)
 
                 # Auto-generate timestamp if needed
@@ -834,8 +844,11 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
                 processed_item = item.copy()
                 processed_item[SUBJECT_ID_COLUMN_NAME] = subject_node_id
                 processed_item[DATASOURCE_ID_COLUMN] = self.datasource_id
+                processed_item[TENANT_ID_COLUMN] = self.tenant_id or ""
                 if processed_item.get("id") not in (None, ""):
-                    processed_item[STORAGE_KEY_COLUMN] = build_storage_key(self.datasource_id, processed_item["id"])
+                    processed_item[STORAGE_KEY_COLUMN] = build_storage_key(
+                        self.datasource_id, processed_item["id"], tenant_id=self.tenant_id
+                    )
                 processed_item.pop(SUBJECT_PATH_COLUMN_NAME, None)
 
                 # Auto-generate timestamp if needed
@@ -882,7 +895,7 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
 
         results = []
         for path, name in path_filter:
-            conditions = [datasource_condition(self.datasource_id)]
+            conditions = [datasource_condition(self.datasource_id, self.tenant_id, tenant_column=True)]
             if additional_conditions:
                 conditions.extend(additional_conditions)
 
@@ -1103,7 +1116,7 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
         where_condition = and_(
             eq(SUBJECT_ID_COLUMN_NAME, old_subject_node_id),
             eq("name", old_name),
-            datasource_condition(self.datasource_id),
+            datasource_condition(self.datasource_id, self.tenant_id, tenant_column=True),
         )
 
         # Check for conflicts when both name and parent are changing
@@ -1112,7 +1125,7 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
             conflict_condition = and_(
                 eq(SUBJECT_ID_COLUMN_NAME, new_subject_node_id),
                 eq("name", new_name),
-                datasource_condition(self.datasource_id),
+                datasource_condition(self.datasource_id, self.tenant_id, tenant_column=True),
             )
             existing_count = self._count_rows(conflict_condition)
             if existing_count > 0:
@@ -1205,7 +1218,7 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
         conditions = [
             eq(SUBJECT_ID_COLUMN_NAME, subject_node_id),
             eq(NAME_COLUMN_NAME, name.strip()),
-            datasource_condition(self.datasource_id),
+            datasource_condition(self.datasource_id, self.tenant_id, tenant_column=True),
         ]
         if extra_conditions:
             conditions.extend(extra_conditions)
@@ -1271,7 +1284,7 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
             self._ensure_table_ready()
 
             # Build where clause
-            conditions = [eq(SUBJECT_ID_COLUMN_NAME, node_id), datasource_condition(self.datasource_id)]
+            conditions = [eq(SUBJECT_ID_COLUMN_NAME, node_id), datasource_condition(self.datasource_id, self.tenant_id, tenant_column=True)]
 
             if name:
                 conditions.append(eq(NAME_COLUMN_NAME, name))
@@ -1331,7 +1344,7 @@ class BaseSubjectEmbeddingStore(BaseEmbeddingStore):
         conditions = [
             eq(SUBJECT_ID_COLUMN_NAME, subject_node_id),
             eq(NAME_COLUMN_NAME, name),
-            datasource_condition(self.datasource_id),
+            datasource_condition(self.datasource_id, self.tenant_id, tenant_column=True),
         ]
         if extra_conditions:
             conditions.extend(extra_conditions)

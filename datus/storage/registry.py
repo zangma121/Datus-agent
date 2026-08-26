@@ -69,8 +69,9 @@ def _get_storage_cached(
     embedding_model_conf_name: str,
     project: str,
     datasource_id: str,
+    tenant_id: str = "",
 ) -> BaseEmbeddingStore:
-    """LRU-cached storage creation, keyed by (factory, embedding model, project, datasource)."""
+    """LRU-cached storage creation, keyed by (factory, embedding model, project, datasource, tenant)."""
     from datus.storage.backend_holder import create_vector_connection
     from datus.storage.subject_tree.store import BaseSubjectEmbeddingStore
 
@@ -85,6 +86,8 @@ def _get_storage_cached(
     if isinstance(factory, type) and issubclass(factory, BaseSubjectEmbeddingStore):
         kwargs["project"] = project
         kwargs["datasource_id"] = datasource_id
+        if tenant_id:
+            kwargs["tenant_id"] = tenant_id
 
     store = factory(get_embedding_model(embedding_model_conf_name), **kwargs)
     return store
@@ -95,6 +98,7 @@ def get_storage(
     embedding_model_conf_name: str,
     project: str,
     datasource_id: str = "",
+    tenant_id: str = "",
 ) -> BaseEmbeddingStore:
     """Return a storage instance scoped to *project* and datasource wrapper.
 
@@ -109,7 +113,9 @@ def get_storage(
     """
     with _registry_lock:
         _factory_registry[factory.__name__] = factory
-    return _get_storage_cached(factory.__name__, embedding_model_conf_name, project, datasource_id or "")
+    return _get_storage_cached(
+        factory.__name__, embedding_model_conf_name, project, datasource_id or "", tenant_id or ""
+    )
 
 
 @lru_cache(maxsize=256)
