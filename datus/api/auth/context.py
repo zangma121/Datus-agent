@@ -10,6 +10,9 @@ from datus.configuration.agent_config import AgentConfig
 class AppContext:
     """Request context with optional agent configuration.
 
+    - ``tenant_id``: first-class tenant boundary (GienBI ``orgId``). ``None``
+      means the single-tenant default; storage keys, session directories and
+      the service cache all two-level key on ``(tenant_id, project_id)``.
     - ``user_id``: identifier from the auth provider; ``None`` means anonymous.
       Used as ``SessionManager.scope`` to isolate sessions per user.
     - ``project_id``: optional project identifier; ``None`` means the single
@@ -23,6 +26,7 @@ class AppContext:
       the single-tenant default.
     """
 
+    tenant_id: Optional[str] = None
     user_id: Optional[str] = None
     project_id: Optional[str] = None
     config: Optional[AgentConfig] = None
