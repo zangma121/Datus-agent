@@ -182,8 +182,21 @@ def test_get_db_name_type(agent_config: AgentConfig):
     assert db_type == DBType.SQLITE
 
 
-def test_get_db_name_type_with_custom_db_name(agent_config: AgentConfig):
-    """When db_name is not a datasource key, it should be preserved as the database name."""
+def test_get_db_name_type_with_custom_db_name(tmp_path, monkeypatch):
+    """When db_name is not a datasource key, it should be preserved as the database name.
+
+    ``bird_sqlite`` is declared with a ``~/``-relative ``path_pattern`` in the
+    shared test agent.yml, so the datasource only exists on machines that
+    downloaded the BIRD benchmark into their real home. Redirect ``HOME`` to a
+    tmp dir with a placeholder sqlite so the glob resolves and the test is
+    hermetic.
+    """
+    bird_dir = tmp_path / "benchmark" / "bird" / "dev_20240627" / "dev_databases" / "dev"
+    bird_dir.mkdir(parents=True)
+    (bird_dir / "dev.sqlite").touch()
+    monkeypatch.setenv("HOME", str(tmp_path))
+    agent_config = load_agent_config(config=str(TEST_CONF_DIR / "agent.yml"), home=str(tmp_path), reload=True)
+
     agent_config.current_datasource = "bird_sqlite"
     db_name, db_type = agent_config.current_db_name_type(db_name="my_custom_db")
     assert db_name == "my_custom_db"
