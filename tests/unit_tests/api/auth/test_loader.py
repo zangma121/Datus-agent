@@ -96,3 +96,20 @@ def test_constructor_failure(fake_module):
             {"auth_provider": {"class": f"{fake_module}.DummyAuth", "kwargs": {"bad": 1}}},
             datasource="ns",
         )
+
+
+def test_loads_gienbi_provider_with_multi_tenant_kwargs():
+    """The shipped GienBI provider activates via agent.yml kwargs (T1.4)."""
+    provider = load_auth_provider(
+        {
+            "auth_provider": {
+                "class": "datus.api.auth.gienbi_provider:GienBIAuthProvider",
+                "kwargs": {"multi_tenant": True},
+            }
+        },
+        datasource="default",
+    )
+    from datus.api.auth.gienbi_provider import GienBIAuthProvider
+
+    assert isinstance(provider, GienBIAuthProvider)
+    assert provider.multi_tenant is True

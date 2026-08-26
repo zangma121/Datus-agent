@@ -521,6 +521,18 @@ agent:
     # returns what it has. Tables it did not reach are simply omitted, and the
     # client re-asks per table.
     prefetch_budget_seconds: 3
+    # Custom auth provider for hosted/multi-tenant deployments. The GienBI
+    # provider maps trusted gateway headers onto the request context:
+    #   X-GienBI-OrgId   -> tenant_id   (tenant boundary)
+    #   X-GienBI-UserId  -> user_id     (session scope)
+    #   X-GienBI-AgentId -> sub_agent_name (KB read boundary, optional)
+    #   X-GienBI-CubeToken -> Cube JWT passthrough (optional)
+    # With ``multi_tenant: true`` a request missing org/user identity is
+    # rejected (fail-closed) instead of becoming anonymous.
+    # auth_provider:
+    #   class: datus.api.auth.gienbi_provider:GienBIAuthProvider
+    #   kwargs:
+    #     multi_tenant: true
 
   autocomplete:
     # After switching / adding / editing a datasource, refresh the LanceDB
