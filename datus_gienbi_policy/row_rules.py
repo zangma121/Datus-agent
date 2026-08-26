@@ -14,14 +14,16 @@ the caller denies (chat2agent's deny-by-default).
 from typing import Any, Dict, List, Optional
 
 # rule op -> (sqlglot operator, cube operator)
+# Cube operators: equals/notEquals/in are generic; gt/gte/lt/lte are the
+# numeric comparison operators (afterDate/beforeDate are date-only).
 _OP_MAP = {
     "eq": ("=", "equals"),
     "ne": ("<>", "notEquals"),
     "in": ("IN", "in"),
-    "gt": (">", "afterDate"),
-    "ge": (">=", "afterOrEqualsDate"),
-    "lt": ("<", "beforeDate"),
-    "le": ("<=", "beforeOrEqualsDate"),
+    "gt": (">", "gt"),
+    "ge": (">=", "gte"),
+    "lt": ("<", "lt"),
+    "le": ("<=", "lte"),
 }
 
 

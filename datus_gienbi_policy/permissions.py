@@ -90,12 +90,13 @@ class PermissionReader:
             owner_rows = conn.execute(
                 """
                 SELECT 1 AS is_owner
-                FROM user_role ur
-                JOIN role r ON r.id = ur.role_id
-                WHERE ur.org_id = %s AND ur.user_id = %s AND r.type = 'ORG_OWNER'
+                FROM rel_role_user rru
+                JOIN role r ON r.id = rru.role_id
+                JOIN `user` u ON u.id = rru.user_id
+                WHERE u.id = %s AND r.org_id = %s AND r.type = 'ORG_OWNER'
                 LIMIT 1
                 """,
-                (org_id, user_id),
+                (user_id, org_id),
             )
             org_owner = bool(owner_rows)
             return _UserPermissions(metrics=metrics, org_owner=org_owner)
@@ -104,17 +105,24 @@ class PermissionReader:
             return _UserPermissions(metrics={}, org_owner=False)
 
     def forbidden_columns(self, org_id: str, user_id: str) -> List[str]:
-        """Columns this user must never see (``rel_subject_columns``)."""
+        """Columns this user must never see (``rel_subject_columns``).
+
+        Rules attach to USER/ROLE/DEPT subjects; a user inherits role and
+        dept rules (chat2agent ``_subject_where_clause`` union).
+        """
         conn = self._connection_factory()
         try:
+            clauses, params = self._subject_where_clause(conn, org_id, user_id)
+            if not clauses:
+                return []
             rows = conn.execute(
-                """
+                f"""
                 SELECT column_permission
                 FROM rel_subject_columns
-                WHERE org_id = %s AND user_id = %s
+                WHERE ({clauses})
                   AND is_applicable = 1 AND rule_type = 'forbidden'
                 """,
-                (org_id, user_id),
+                params,
             )
             import json as _json
 
@@ -130,6 +138,53 @@ class PermissionReader:
         except Exception as exc:  # noqa: BLE001 - missing table => no masking rule
             logger.debug("GienBI column-permission read skipped: %s", exc)
             return []
+
+    # ── subject resolution (USER/ROLE/DEPT union) ────────────────────
+
+    def _subject_where_clause(self, conn, org_id: str, user_id: str):
+        """OR-union over the user's USER/ROLE/DEPT subject ids.
+
+        Mirrors chat2agent ``_load_subject_ids``: roles via
+        rel_role_user+role, dept via user.dept_id.
+        """
+        subjects = self._load_subject_ids(conn, org_id, user_id)
+        clauses: List[str] = []
+        params: List[str] = []
+        for subject_type, subject_ids in subjects.items():
+            ids = [i for i in subject_ids if i]
+            if not ids:
+                continue
+            placeholders = ", ".join(["%s"] * len(ids))
+            clauses.append(f"(subject_type = %s AND subject_id IN ({placeholders}))")
+            params.append(subject_type)
+            params.extend(ids)
+        return " OR ".join(clauses), params
+
+    def _load_subject_ids(self, conn, org_id: str, user_id: str) -> Dict[str, List[str]]:
+        roles = conn.execute(
+            """
+            SELECT DISTINCT r.id
+            FROM `user` u
+            JOIN rel_role_user rru ON rru.user_id = u.id
+            JOIN `role` r ON r.id = rru.role_id
+            WHERE u.id = %s AND r.org_id = %s
+            """,
+            (user_id, org_id),
+        )
+        depts = conn.execute(
+            """
+            SELECT DISTINCT d.id
+            FROM `user` u
+            JOIN dept d ON d.id = u.dept_id
+            WHERE u.id = %s AND d.org_id = %s
+            """,
+            (user_id, org_id),
+        )
+        return {
+            "USER": [user_id],
+            "ROLE": [str(row.get("id") or "") for row in roles or [] if row.get("id")],
+            "DEPT": [str(row.get("id") or "") for row in depts or [] if row.get("id")],
+        }
 
     # ── row-level scope ──────────────────────────────────────────────
 
@@ -152,26 +207,30 @@ class PermissionReader:
             model_id = str(model.get("id") or "")
             model_name = str(model.get("en_name") or view_id)
 
-            script_rows = conn.execute(
-                """
-                SELECT script
-                FROM rel_subject_rows
-                WHERE org_id = %s AND user_id = %s
-                  AND is_applicable = 1
-                  AND (LOWER(view_id) = LOWER(%s) OR view_id = %s)
-                """,
-                (org_id, user_id, view_id, model_id),
-            )
-            scripts = []
-            for row in script_rows or []:
-                import json as _json
+            clauses, params = self._subject_where_clause(conn, org_id, user_id)
+            if not clauses:
+                scripts = []
+            else:
+                script_rows = conn.execute(
+                    f"""
+                    SELECT script
+                    FROM rel_subject_rows
+                    WHERE org_id = %s AND ({clauses})
+                      AND is_applicable = 1
+                      AND (LOWER(view_id) = LOWER(%s) OR view_id = %s)
+                    """,
+                    [org_id] + params + [view_id, model_id],
+                )
+                scripts = []
+                for row in script_rows or []:
+                    import json as _json
 
-                try:
-                    parsed = _json.loads(row.get("script") or "")
-                    if isinstance(parsed, dict):
-                        scripts.append(parsed)
-                except (ValueError, TypeError):
-                    continue
+                    try:
+                        parsed = _json.loads(row.get("script") or "")
+                        if isinstance(parsed, dict):
+                            scripts.append(parsed)
+                    except (ValueError, TypeError):
+                        continue
             return _RowRules(exists=True, operator=operator, scripts=scripts, model_name=model_name)
         except Exception as exc:  # noqa: BLE001 - deny on read failure
             logger.error("GienBI row-rules read failed (denying): %s", exc)

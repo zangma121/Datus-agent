@@ -261,13 +261,16 @@
   （SemanticTools.query_metrics 调 before_sql_read）；Cube 适配器
   inject_row_filters 消费 row_filters 并入查询载荷；list_metrics 同样过
   指标权限过滤。
-- **遗留缺口（记录待办）**：
-  1. 主体模型只匹配 user_id（chat2agent 是 USER/ROLE/DEPT 并集）——挂在
-     角色/部门上的行规则、列规则当前不可见 → fail-open 风险，接 GienBI
-     真实库前必须补（需要 role/dept 表结构）；
-  2. 列屏蔽不覆盖 arrow 格式（snowflake）结果与 query_metrics 结果形态；
-  3. cube 数值 gt/lt 操作符映射成了日期操作符（接线前休眠 bug）；
-  4. 权限矩阵 E2E（tests/e2e/test_permission_matrix.py）待 live 环境。
+- **评审遗留缺口——已全部修复（对照 chat2agent 参照实现）**：
+  1. ✅ 主体模型：读法改为 USER/ROLE/DEPT 并集（`_subject_where_clause`
+     移植：role 经 rel_role_user+role、dept 经 user.dept_id），且发现并
+     修复了更严重的问题——真实表是 subject_type/subject_id 结构而非
+     user_id 列，旧 SQL 在真实库上根本跑不通。测试夹具同步改为真实
+     表结构（SqliteSubjectFixture），角色/部门规则生效有测试守护；
+  2. ✅ 列屏蔽补 arrow 路径（pyarrow Table drop_columns）；
+  3. ✅ cube 数值比较符改回 gt/gte/lt/lte（原误映射为日期操作符）。
+- **仍待 live 环境**：权限矩阵 E2E（tests/e2e/test_permission_matrix.py）、
+  query_metrics 结果形态的屏蔽接线（需确认生产调用点后接）。
 
 ---
 

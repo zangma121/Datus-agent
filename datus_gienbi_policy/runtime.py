@@ -234,11 +234,23 @@ class GienbiPolicyRuntime:
     def after_read_result(self, result: Any, *, sql: str, datasource: str, dialect: str, policy_context: Dict[str, Any]):
         """T4.6: drop forbidden columns from row results with warnings.
 
-        ``result`` is a list of row dicts (the datus read-result shape);
-        anything else passes through untouched.
+        Handles list-of-dicts rows and pyarrow Tables (the snowflake
+        arrow-format path); anything else passes through untouched.
         """
         org, user = self._identity(policy_context)
         forbidden = self.reader.forbidden_columns(org, user)
+
+        if forbidden and hasattr(result, "column_names") and hasattr(result, "drop_columns"):
+            # pyarrow Table path (snowflake arrow format).
+            forbidden_set = {c.lower() for c in forbidden}
+            dropped = sorted(c for c in result.column_names if c.lower() in forbidden_set)
+            if dropped:
+                masked = result.drop_columns(dropped)
+                warnings = [f"masked forbidden column: {col}" for col in dropped]
+                logger.info("GienBI column policy masked (arrow): %s", ", ".join(dropped))
+                return {"allowed": True, "result": masked, "masked_warnings": warnings}
+            return {"allowed": True, "result": result, "masked_warnings": []}
+
         if not forbidden or not isinstance(result, list) or not result:
             return {"allowed": True, "result": result, "masked_warnings": []}
 
