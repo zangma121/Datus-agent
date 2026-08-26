@@ -175,11 +175,14 @@
   组网；live 测试 5/5 通过（meta/维度/分组计数/dry_run/validate），按
   CUBE_LIVE_URL/CUBE_LIVE_SECRET 门控，无环境自动跳过。
 - live 发现并修复：新版 Cube /sql 响应外层多包一层（两种格式都兼容）。
-- **T3.5 进度（精确记录）**：适配器侧端到端已通——bootstrap-kb
-  --from_adapter cube 从 live Cube 取出全部指标并送达 storage_sync；
-  卡点在本机 Lance 向量写入的内部错误（"Spill"，环境级、确定性复现、
-  与分支代码无关）。恢复时第一步：对该数据源切 kb.search.mode=fts 绕过
-  向量后端重试；多租户 cubeOrgId 路径仍需 GienBI bank 栈。
+- **T3.5 ✅ 已完成（提交 65e784e5）**：bootstrap-kb --from_adapter cube
+  端到端打通——live Cube 的 1 个语义模型 + 2 个指标同步进知识库，
+  英文/中文语义检索均可召回；原始 CLI 命令同样跑通（metrics_count=2）。
+  途中修复三个根因：① 适配器语义模型方法应为同步（接口约定）；②
+  _model_info 缺物理 table_name；③ 存储健壮性——lancedb merge_insert 在
+  部分构建（arm64，main 上复现）原生崩溃，加 delete+insert 兜底；pandas
+  ns 时间戳对 Lance ms schema 的有损转换，写入前统一降精度。
+  多租户 cubeOrgId 路径仍需 GienBI bank 栈。
 - **做**：`tests/integration/test_cube_adapter_live.py`，标记 `@pytest.mark.
   integration`；用 GienBI dev Cube（`cubejs-bank` 容器，需带测试 org 的 model
   目录）。跑 list/query/sql 三条路径。
