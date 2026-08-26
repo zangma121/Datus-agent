@@ -12,7 +12,7 @@ adapt on their side.
 """
 
 import time
-from typing import Any, Callable, Dict, Tuple
+from typing import Any, Callable, Dict, List, Tuple
 
 from datus.utils.loggings import get_logger
 
@@ -42,6 +42,14 @@ class PermissionReader:
         perms = self._user_permissions(org_id, user_id)
         permission = perms.metrics.get((resource_type, resource_id))
         return permission is not None and (permission & VIEW_PERMISSION_BIT) != 0
+
+    def row_rules(self, org_id: str, user_id: str, view_id: str) -> "_RowRules":
+        """Load the row-scope rules for one semantic model (cube/view).
+
+        GienBI semantics: rules present but none convertible ⇒ deny
+        (fail-closed); no rules at all ⇒ unrestricted.
+        """
+        return self._row_rules(org_id, user_id, view_id)
 
     def is_org_owner(self, org_id: str, user_id: str) -> bool:
         return self._user_permissions(org_id, user_id).org_owner
@@ -95,6 +103,80 @@ class PermissionReader:
             logger.error("GienBI permission read failed (denying): %s", exc)
             return _UserPermissions(metrics={}, org_owner=False)
 
+    def forbidden_columns(self, org_id: str, user_id: str) -> List[str]:
+        """Columns this user must never see (``rel_subject_columns``)."""
+        conn = self._connection_factory()
+        try:
+            rows = conn.execute(
+                """
+                SELECT column_permission
+                FROM rel_subject_columns
+                WHERE org_id = %s AND user_id = %s
+                  AND is_applicable = 1 AND rule_type = 'forbidden'
+                """,
+                (org_id, user_id),
+            )
+            import json as _json
+
+            columns: List[str] = []
+            for row in rows or []:
+                try:
+                    parsed = _json.loads(row.get("column_permission") or "")
+                    if isinstance(parsed, list):
+                        columns.extend(str(c) for c in parsed if c)
+                except (ValueError, TypeError):
+                    continue
+            return columns
+        except Exception as exc:  # noqa: BLE001 - missing table => no masking rule
+            logger.debug("GienBI column-permission read skipped: %s", exc)
+            return []
+
+    # ── row-level scope ──────────────────────────────────────────────
+
+    def _row_rules(self, org_id: str, user_id: str, view_id: str) -> "_RowRules":
+        conn = self._connection_factory()
+        try:
+            model_rows = conn.execute(
+                """
+                SELECT id, en_name, table_name, permission_operator
+                FROM semantic_model
+                WHERE org_id = %s AND del_flag = '0' AND cube_del_flag = '0'
+                  AND LOWER(en_name) = LOWER(%s)
+                """,
+                (org_id, view_id),
+            )
+            if not model_rows:
+                return _RowRules(exists=False, operator="AND", scripts=[])
+            model = model_rows[0]
+            operator = str(model.get("permission_operator") or "AND").upper()
+            model_id = str(model.get("id") or "")
+            model_name = str(model.get("en_name") or view_id)
+
+            script_rows = conn.execute(
+                """
+                SELECT script
+                FROM rel_subject_rows
+                WHERE org_id = %s AND user_id = %s
+                  AND is_applicable = 1
+                  AND (LOWER(view_id) = LOWER(%s) OR view_id = %s)
+                """,
+                (org_id, user_id, view_id, model_id),
+            )
+            scripts = []
+            for row in script_rows or []:
+                import json as _json
+
+                try:
+                    parsed = _json.loads(row.get("script") or "")
+                    if isinstance(parsed, dict):
+                        scripts.append(parsed)
+                except (ValueError, TypeError):
+                    continue
+            return _RowRules(exists=True, operator=operator, scripts=scripts, model_name=model_name)
+        except Exception as exc:  # noqa: BLE001 - deny on read failure
+            logger.error("GienBI row-rules read failed (denying): %s", exc)
+            return _RowRules(exists=True, operator="AND", scripts=[{"__deny__": True}])
+
 
 class _UserPermissions:
     __slots__ = ("metrics", "org_owner")
@@ -102,3 +184,20 @@ class _UserPermissions:
     def __init__(self, metrics: Dict[Tuple[str, str], int], org_owner: bool):
         self.metrics = metrics
         self.org_owner = org_owner
+
+
+class _RowRules:
+    """Row-scope rules for one semantic model (chat2agent semantics).
+
+    ``exists=False``: model not row-governed at all (unrestricted).
+    ``scripts``: raw JSON rule trees from ``rel_subject_rows.script``.
+    ``model_name``: canonical GienBI ``en_name`` (Cube member prefix).
+    """
+
+    __slots__ = ("exists", "operator", "scripts", "model_name")
+
+    def __init__(self, exists: bool, operator: str, scripts: list, model_name: str = ""):
+        self.exists = exists
+        self.operator = operator
+        self.scripts = scripts
+        self.model_name = model_name
