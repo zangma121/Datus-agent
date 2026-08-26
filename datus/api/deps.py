@@ -68,7 +68,7 @@ async def get_datus_service(request: Request) -> DatusService:
     request.state.app_context = ctx
 
     expected_fp = DatusService.compute_fingerprint(ctx.config) if ctx.config is not None else None
-    cache_key = ctx.project_id or _DEFAULT_PROJECT_KEY
+    tenant_key = ctx.tenant_id or ""
 
     async def _factory() -> DatusService:
         # Load config on-demand if not provided by auth provider
@@ -82,13 +82,15 @@ async def get_datus_service(request: Request) -> DatusService:
 
         return DatusService(
             agent_config=agent_config,
-            project_id=cache_key,
+            project_id=ctx.project_id or _DEFAULT_PROJECT_KEY,
             default_source=_default_source,
             default_interactive=_default_interactive,
             stream_thinking=_stream_thinking,
         )
 
-    return await _service_cache.get_or_create(cache_key, _factory, expected_fingerprint=expected_fp)
+    return await _service_cache.get_or_create(
+        ctx.project_id or _DEFAULT_PROJECT_KEY, _factory, expected_fingerprint=expected_fp, tenant_id=tenant_key
+    )
 
 
 def get_app_context(request: Request) -> AppContext:

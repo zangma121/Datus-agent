@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from datus.api.services.datus_service import DatusService
 from datus.api.services.datus_service_cache import DatusServiceCache
 
 
@@ -54,7 +55,7 @@ class TestGetOrCreate:
 
         result = await cache.get_or_create("proj-1", factory)
         assert result is svc
-        assert "proj-1" in cache._cache
+        assert ("", "proj-1") in cache._cache
 
     async def test_cache_hit_returns_existing(self):
         """Second call returns cached instance, not factory."""
@@ -94,7 +95,7 @@ class TestGetOrCreate:
         with pytest.raises(ValueError, match="config error"):
             await cache.get_or_create("fail", bad_factory)
 
-        assert "fail" not in cache._cache
+        assert ("", "fail") not in cache._cache
         assert "fail" not in cache._futures
 
     async def test_lru_eviction_when_over_capacity(self):
@@ -110,9 +111,9 @@ class TestGetOrCreate:
         await cache.get_or_create("c", AsyncMock(return_value=svc_c))
 
         # 'a' should be evicted (oldest)
-        assert "a" not in cache._cache
-        assert "b" in cache._cache
-        assert "c" in cache._cache
+        assert ("", "a") not in cache._cache
+        assert ("", "b") in cache._cache
+        assert ("", "c") in cache._cache
 
     async def test_active_tasks_skip_eviction(self):
         """Entries with active tasks are not evicted, cache may exceed max_size."""
@@ -176,7 +177,7 @@ class TestFingerprintEviction:
         assert result is new
         factory.assert_awaited_once()
         old.shutdown.assert_awaited_once()
-        assert cache._cache["p"] is new
+        assert cache._cache[("", "p")] is new
 
     async def test_mismatched_fingerprint_with_active_tasks_defers_rebuild(self):
         """Fingerprint changes are deferred while tasks are active.
@@ -196,7 +197,7 @@ class TestFingerprintEviction:
         factory.assert_not_called()
         old.shutdown.assert_not_awaited()
         assert result is old
-        assert cache._cache["p"] is old
+        assert cache._cache[("", "p")] is old
 
     async def test_mismatched_fingerprint_rebuilds_after_tasks_drain(self):
         """Once the busy instance goes idle, the next request rebuilds."""
@@ -206,7 +207,7 @@ class TestFingerprintEviction:
 
         # First mismatched request is deferred (tasks still active).
         await cache.get_or_create("p", AsyncMock(return_value=_mock_service("p")), expected_fingerprint="fp-new")
-        assert cache._cache["p"] is old
+        assert cache._cache[("", "p")] is old
 
         # Task drained — the next mismatched request evicts and rebuilds.
         old.has_active_tasks.return_value = False
@@ -215,7 +216,7 @@ class TestFingerprintEviction:
 
         assert result is new
         old.shutdown.assert_awaited_once()
-        assert cache._cache["p"] is new
+        assert cache._cache[("", "p")] is new
 
     async def test_none_fingerprint_preserves_legacy_behavior(self):
         cache = DatusServiceCache()
@@ -239,7 +240,7 @@ class TestEvict:
         await cache.get_or_create("proj-e", AsyncMock(return_value=svc))
 
         await cache.evict("proj-e")
-        assert "proj-e" not in cache._cache
+        assert ("", "proj-e") not in cache._cache
         svc.shutdown.assert_awaited_once()
 
     async def test_evict_nonexistent_is_noop(self):
@@ -439,3 +440,43 @@ class TestPluginChangeRebuild:
             assert await self._request(cache, real_agent_config) is not first
         finally:
             await cache.shutdown()
+
+
+@pytest.mark.asyncio
+class TestTenantCompositeKey:
+    async def test_same_project_different_tenant_gets_distinct_service(self):
+        """(tenant, project) two-level keying: tenant isolation in the cache."""
+        cache = DatusServiceCache()
+        calls = []
+
+        async def factory():
+            svc = MagicMock(spec=DatusService)
+            svc.config_fingerprint = "fp"
+            svc.has_active_tasks.return_value = False
+            calls.append(svc)
+            return svc
+
+        svc_default = await cache.get_or_create("proj-1", factory, tenant_id="")
+        svc_org_a = await cache.get_or_create("proj-1", factory, tenant_id="org-a")
+        svc_org_a_again = await cache.get_or_create("proj-1", factory, tenant_id="org-a")
+
+        assert svc_default is not svc_org_a
+        assert svc_org_a_again is svc_org_a
+        assert len(calls) == 2
+
+    async def test_evict_scopes_to_tenant(self):
+        cache = DatusServiceCache()
+
+        async def factory():
+            svc = MagicMock(spec=DatusService)
+            svc.config_fingerprint = "fp"
+            svc.has_active_tasks.return_value = False
+            return svc
+
+        svc_org_a = await cache.get_or_create("proj-1", factory, tenant_id="org-a")
+        await cache.evict("proj-1", tenant_id="org-a")
+        svc_org_b = await cache.get_or_create("proj-1", factory, tenant_id="org-b")
+        svc_rebuilt = await cache.get_or_create("proj-1", factory, tenant_id="org-a")
+
+        assert svc_rebuilt is not svc_org_a
+        assert svc_org_b is not svc_rebuilt

@@ -1,7 +1,10 @@
-"""Global LRU cache: project_id -> DatusService.
+"""Global LRU cache: (tenant_id, project_id) -> DatusService.
 
 Uses Future-based thundering herd prevention — concurrent requests for
-the same project_id share a single factory call.
+the same (tenant_id, project_id) share a single factory call. Tenant-level
+keying (datus-agent-cube M1b) gives each tenant its own DatusService and
+AgentConfig clone; the default (empty) tenant preserves the legacy
+project-only behavior.
 """
 
 import asyncio
@@ -19,7 +22,7 @@ class DatusServiceCache:
 
     def __init__(self, max_size: int = 128):
         self._max_size = max_size
-        self._cache: collections.OrderedDict[str, DatusService] = collections.OrderedDict()
+        self._cache: collections.OrderedDict[tuple, DatusService] = collections.OrderedDict()
         self._futures: dict[str, asyncio.Future[DatusService]] = {}
         self._lock = asyncio.Lock()
         self._pending_tasks: set[asyncio.Task] = set()
@@ -35,22 +38,27 @@ class DatusServiceCache:
         project_id: str,
         factory: Callable[[], Awaitable[DatusService]],
         expected_fingerprint: Optional[str] = None,
+        tenant_id: str = "",
     ) -> DatusService:
         """Return cached DatusService or create via factory (thundering-herd safe).
+
+        Entries are keyed on ``(tenant_id, project_id)``; ``tenant_id="")``
+        is the default tenant and behaves like the legacy project-only key.
 
         If ``expected_fingerprint`` is provided and does not match the cached
         instance's ``config_fingerprint``, the stale entry is evicted before
         creating a new one.
         """
+        cache_key = (str(tenant_id or ""), project_id)
         is_creator = False
         stale_svc: Optional[DatusService] = None
 
         async with self._lock:
             # Fast path: cache hit
-            if project_id in self._cache:
-                cached = self._cache[project_id]
+            if cache_key in self._cache:
+                cached = self._cache[cache_key]
                 if expected_fingerprint is None or cached.config_fingerprint == expected_fingerprint:
-                    self._cache.move_to_end(project_id)
+                    self._cache.move_to_end(cache_key)
                     return cached
                 # Fingerprint mismatch. Rebuilding now would orphan any in-flight
                 # chat task: its interaction broker lives in this instance's
@@ -60,27 +68,27 @@ class DatusServiceCache:
                 # busy — keep serving it until its tasks drain, after which the
                 # next request rebuilds with the new config.
                 if cached.has_active_tasks():
-                    self._cache.move_to_end(project_id)
+                    self._cache.move_to_end(cache_key)
                     logger.info(
-                        f"Deferring DatusService rebuild for project {project_id}: "
+                        f"Deferring DatusService rebuild for {cache_key}: "
                         f"AgentConfig fingerprint changed but tasks are still active"
                     )
                     return cached
                 # Idle instance — safe to evict and rebuild with the new config.
-                stale_svc = self._cache.pop(project_id)
-                logger.info(f"Evicting DatusService for project {project_id} due to AgentConfig fingerprint mismatch")
+                stale_svc = self._cache.pop(cache_key)
+                logger.info(f"Evicting DatusService for {cache_key} due to AgentConfig fingerprint mismatch")
 
             # Another coroutine is already creating this entry — share its future
-            if project_id in self._futures:
-                fut = self._futures[project_id]
+            if cache_key in self._futures:
+                fut = self._futures[cache_key]
             else:
                 # We are the creator — register a future for waiters
                 fut = asyncio.get_running_loop().create_future()
-                self._futures[project_id] = fut
+                self._futures[cache_key] = fut
                 is_creator = True
 
         if stale_svc is not None:
-            await self._dispose(project_id, stale_svc)
+            await self._dispose(cache_key, stale_svc)
 
         if not is_creator:
             # Wait for the creator coroutine to finish
@@ -97,25 +105,25 @@ class DatusServiceCache:
             raise
 
         async with self._lock:
-            self._cache[project_id] = svc
-            self._cache.move_to_end(project_id)
-            self._futures.pop(project_id, None)
+            self._cache[cache_key] = svc
+            self._cache.move_to_end(cache_key)
+            self._futures.pop(cache_key, None)
 
             # Evict oldest if over capacity, but skip services with active tasks
             evicted = []
             while len(self._cache) > self._max_size:
                 # Find the oldest entry without active tasks
-                candidate_pid = None
-                for pid in self._cache:
-                    if pid == project_id:
+                candidate_key = None
+                for key in self._cache:
+                    if key == cache_key:
                         continue
-                    if not self._cache[pid].has_active_tasks():
-                        candidate_pid = pid
+                    if not self._cache[key].has_active_tasks():
+                        candidate_key = key
                         break
-                if candidate_pid is None:
+                if candidate_key is None:
                     break  # all entries have active tasks — allow cache to exceed max_size
-                old_svc = self._cache.pop(candidate_pid)
-                evicted.append((candidate_pid, old_svc))
+                old_svc = self._cache.pop(candidate_key)
+                evicted.append((candidate_key, old_svc))
 
         # Resolve the future so waiters get the result
         if not fut.done():
@@ -128,17 +136,18 @@ class DatusServiceCache:
 
         return svc
 
-    async def evict(self, project_id: str) -> None:
+    async def evict(self, project_id: str, tenant_id: str = "") -> None:
         """Evict a DatusService from cache (config change).
 
         Always removes from cache so new requests get fresh config.
         If the service has active tasks, defers shutdown until tasks drain.
         """
+        cache_key = (str(tenant_id or ""), project_id)
         async with self._lock:
-            svc = self._cache.pop(project_id, None)
+            svc = self._cache.pop(cache_key, None)
         if not svc:
             return
-        await self._dispose(project_id, svc)
+        await self._dispose(cache_key, svc)
 
     async def _dispose(self, project_id: str, svc: DatusService) -> None:
         """Shutdown a service, deferring if it still has active tasks."""

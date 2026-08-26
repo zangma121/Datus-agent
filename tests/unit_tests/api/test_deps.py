@@ -191,7 +191,7 @@ class TestGetDatusService:
         mock_cache = MagicMock(spec=DatusServiceCache)
         captured = {}
 
-        async def fake_get_or_create(key, factory, expected_fingerprint=None):
+        async def fake_get_or_create(key, factory, expected_fingerprint=None, tenant_id=""):
             captured["svc"] = await factory()
             return captured["svc"]
 
