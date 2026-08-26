@@ -320,3 +320,23 @@ class TestValidateAndModels:
         assert model is not None
         assert model.name == "Users"
         assert await adapter.get_semantic_model("Missing") is None
+
+
+class TestAdapterFactoryWiring:
+    """T3.4: the real creation path — agent config -> adapter config ->
+    registry factory -> CubeAdapter (no live Cube needed)."""
+
+    def test_registry_creates_cube_adapter_from_config_dict(self):
+        from datus_semantic_cube import register
+        from datus_semantic_cube.adapter import CubeAdapter
+        from datus_semantic_cube.config import CubeConfig
+        from datus.tools.semantic_tools import semantic_adapter_registry
+
+        register()
+        metadata = semantic_adapter_registry.get_metadata("cube")
+        assert metadata is not None and metadata.config_class is CubeConfig
+
+        config = CubeConfig(datasource="bank", api_url="http://cube.local/cubejs-api/v1")
+        adapter = semantic_adapter_registry.create_adapter("cube", config)
+        assert isinstance(adapter, CubeAdapter)
+        assert adapter.cube_config.api_url == "http://cube.local/cubejs-api/v1"

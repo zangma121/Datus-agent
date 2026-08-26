@@ -373,10 +373,21 @@ class DatusCLI:
             "session-summarize": self.session_summarize_commands.cmd_session_summarize,
             "memory-organize": self.memory_organize_commands.cmd_memory_organize,
             "services": self.service_commands.cmd_services,
+            "engine": self.engine_commands.cmd_engine,
             "permission": self._cmd_permission,
             "profile": self._cmd_profile,
             "sandbox": self.sandbox_commands.cmd_sandbox,
         }
+
+    @property
+    def engine_commands(self):
+        # Lazy: partial CLI objects in tests assemble command groups by hand,
+        # and /engine only needs the wrapper around existing setters.
+        from datus.cli.engine_commands import EngineCommands
+
+        if getattr(self, "_engine_commands", None) is None:
+            self._engine_commands = EngineCommands(self)
+        return self._engine_commands
 
     @property
     def workflow_runner(self) -> WorkflowRunner:

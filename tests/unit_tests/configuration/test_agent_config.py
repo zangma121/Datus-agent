@@ -3321,3 +3321,44 @@ class TestPromptManagerAttribute:
         # A real clone, not a shared reference back into the original config.
         assert cloned.prompt_manager is not cfg.prompt_manager
         assert get_prompt_manager(agent_config=cloned).user_templates_dir == elsewhere.resolve() / "template"
+
+
+class TestCubeEngineSelection:
+    """T3.1: engine=metricflow/cube via the semantic_layer registry.
+
+    A ``cube`` entry next to ``metricflow`` is selectable explicitly and as
+    the default; ``build_semantic_adapter_config`` carries the cube settings
+    through to the adapter config consumed by the registry factory.
+    """
+
+    def _make_with_cube(self, tmp_path, **cube_overrides):
+        cube_entry = {"api_url": "http://cube.local/cubejs-api/v1", "timeout": 30}
+        cube_entry.update(cube_overrides)
+        return TestAgentConfigServiceSelectors()._make(
+            tmp_path,
+            services={
+                "datasources": {
+                    "bank": {"type": "sqlite", "uri": str(tmp_path / "bank.sqlite")},
+                },
+                "semantic_layer": {
+                    "metricflow": {},
+                    "cube": cube_entry,
+                },
+            },
+        )
+
+    def test_explicit_cube_selection(self, tmp_path):
+        cfg = self._make_with_cube(tmp_path)
+        assert cfg.resolve_semantic_adapter("cube") == "cube"
+
+    def test_cube_as_default(self, tmp_path):
+        cfg = self._make_with_cube(tmp_path, default=True)
+        assert cfg.resolve_semantic_adapter() == "cube"
+
+    def test_build_semantic_adapter_config_carries_cube_settings(self, tmp_path):
+        cfg = self._make_with_cube(tmp_path)
+        adapter_cfg = cfg.build_semantic_adapter_config("cube", database_name="bank")
+        assert adapter_cfg is not None
+        assert adapter_cfg["type"] == "cube"
+        assert adapter_cfg["api_url"] == "http://cube.local/cubejs-api/v1"
+        assert adapter_cfg["datasource"] == "bank"

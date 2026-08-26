@@ -97,6 +97,11 @@ SLASH_COMMANDS: tuple[SlashSpec, ...] = (
     SlashSpec("memory-organize", "Audit and reorganize all persistent stores", "system"),
     SlashSpec("services", "Configure dashboards/schedulers (TUI) or list read-only methods", "system"),
     SlashSpec(
+        "engine",
+        "Show or switch the semantic engine (/engine [name] | --global name)",
+        "system",
+    ),
+    SlashSpec(
         "permission",
         "Switch the permission profile (normal / auto / dangerous)",
         "system",

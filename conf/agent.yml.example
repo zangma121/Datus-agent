@@ -328,6 +328,16 @@ agent:
       #                                   # real ceiling is rows the adapter
       #                                   # actually returns per page x pages.
       #                                   # Exceeding it denies metric queries.
+      # Cube.js semantic layer (datus-agent-cube): engine=cube. Switch with the
+      # project pin (``./.datus/config.yml`` ``semantic: cube``), the /engine
+      # CLI alias, or ``default: true`` here. The API secret only ever enters
+      # through the environment variable named below.
+      # cube:
+      #   api_url: http://localhost:4000/cubejs-api/v1
+      #   api_secret_env: CUBEJS_API_SECRET
+      #   timeout: 60
+      #   timezone: Asia/Shanghai
+      #   default: true
     bi_platforms:
       superset:
         type: superset
