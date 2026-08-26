@@ -871,6 +871,29 @@ class SemanticTools:
                 }
                 for m in async_result
             ]
+            # Metric-level policy gate (M4.4): list_metrics must not reveal
+            # metrics the caller has no VIEW permission on.
+            from datus.tools.policy_runtime import PolicyRuntime
+
+            policy_context = getattr(self.agent_config, "policy_context", None)
+            policy_context = dict(policy_context) if isinstance(policy_context, dict) else {}
+            datasource = getattr(adapter, "datasource", "") or ""
+            metric_decision = PolicyRuntime(self.agent_config).before_metric_read(
+                [m["name"] for m in adapter_metrics], datasource=datasource, policy_context=policy_context
+            )
+            if isinstance(metric_decision, dict):
+                from types import SimpleNamespace
+
+                metric_decision = SimpleNamespace(**metric_decision)
+            if metric_decision.allowed:
+                allowed_set = set(metric_decision.allowed_metrics)
+                denied_count = len(adapter_metrics) - len(allowed_set & {m["name"] for m in adapter_metrics})
+                if denied_count:
+                    logger.info("list_metrics: policy filtered %d metrics from the listing", denied_count)
+                adapter_metrics = [m for m in adapter_metrics if m["name"] in allowed_set]
+            # else: refusal keeps the unfiltered envelope out of reach — an
+            # outright denial means the identity itself is not trusted.
+
             # Adapter path has no guaranteed upstream total — leave it None so consumers
             # know to use has_more / len(items) < limit as the pagination hint.
             return self._build_metrics_envelope(adapter_metrics, total=None, offset=offset, limit=limit)
@@ -1077,6 +1100,26 @@ class SemanticTools:
                 logger.info(f"Policy filtered metrics for query_metrics: {denied_names}")
                 metrics = decision.allowed_metrics
 
+            # Row-level scope gate (M4.5): for metric-query paths this is the
+            # data path — before_sql_read runs here, and on the cube engine
+            # its row_filters are forwarded for adapter injection.
+            sql_decision = PolicyRuntime(self.agent_config).before_sql_read(
+                f"SELECT 1 FROM {path[0] if path else 'metrics'}",
+                datasource=datasource,
+                dialect="",
+                policy_context=policy_context,
+            )
+            if isinstance(sql_decision, dict):
+                from types import SimpleNamespace
+
+                sql_decision = SimpleNamespace(**sql_decision)
+            if not sql_decision.allowed:
+                return FuncToolResult(
+                    success=0,
+                    error=f"Metric query denied by row policy: {sql_decision.reason or 'no reason given'}",
+                )
+            row_filters = list(getattr(sql_decision, "row_filters", None) or [])
+
             # Execute query via adapter
             adapter_query_kwargs = {
                 "metrics": metrics,
@@ -1090,6 +1133,8 @@ class SemanticTools:
                 "order_by": order_by or None,
                 "dry_run": dry_run,
             }
+            if row_filters and hasattr(adapter, "inject_row_filters"):
+                adapter.inject_row_filters(row_filters)
             result = _run_async(adapter.query_metrics(**adapter_query_kwargs))
 
             # Drop non-JSON-serializable metadata entries (MetricFlow puts a

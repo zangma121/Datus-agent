@@ -175,7 +175,7 @@ class PermissionReader:
             return _RowRules(exists=True, operator=operator, scripts=scripts, model_name=model_name)
         except Exception as exc:  # noqa: BLE001 - deny on read failure
             logger.error("GienBI row-rules read failed (denying): %s", exc)
-            return _RowRules(exists=True, operator="AND", scripts=[{"__deny__": True}])
+            return _RowRules(exists=True, operator="AND", scripts=[], read_failed=True)
 
 
 class _UserPermissions:
@@ -192,12 +192,14 @@ class _RowRules:
     ``exists=False``: model not row-governed at all (unrestricted).
     ``scripts``: raw JSON rule trees from ``rel_subject_rows.script``.
     ``model_name``: canonical GienBI ``en_name`` (Cube member prefix).
+    ``read_failed``: permission table unreadable — callers must deny.
     """
 
-    __slots__ = ("exists", "operator", "scripts", "model_name")
+    __slots__ = ("exists", "operator", "scripts", "model_name", "read_failed")
 
-    def __init__(self, exists: bool, operator: str, scripts: list, model_name: str = ""):
+    def __init__(self, exists: bool, operator: str, scripts: list, model_name: str = "", read_failed: bool = False):
         self.exists = exists
         self.operator = operator
         self.scripts = scripts
         self.model_name = model_name
+        self.read_failed = read_failed

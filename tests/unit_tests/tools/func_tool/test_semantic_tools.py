@@ -2096,11 +2096,15 @@ class TestQueryMetricsPolicyGate:
     (missing identity) blocks the read entirely.
     """
 
-    def _patch_runtime(self, monkeypatch, decision):
+    def _patch_runtime(self, monkeypatch, decision, sql_decision=None):
         from types import SimpleNamespace
 
         fake = SimpleNamespace(
-            before_metric_read=lambda metrics, *, datasource, policy_context: decision
+            before_metric_read=lambda metrics, *, datasource, policy_context: decision,
+            before_sql_read=(
+                lambda sql, *, datasource, dialect, policy_context: sql_decision
+                or {"allowed": True, "sql": sql, "applied_policies": []}
+            ),
         )
         monkeypatch.setattr(
             "datus.tools.policy_runtime.PolicyRuntime",

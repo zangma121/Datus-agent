@@ -185,7 +185,9 @@ class GienbiPolicyRuntime:
                 canonical = lowered.get(sql_table.lower())
                 if canonical:
                     rules = self.reader.row_rules(org, user, canonical)
-            if not rules.exists or not rules.scripts:
+            if not rules.exists or rules.read_failed:
+                if rules.read_failed:
+                    return _DENY
                 continue
             model_names.append(rules.model_name or sql_table)
             table_cond = None

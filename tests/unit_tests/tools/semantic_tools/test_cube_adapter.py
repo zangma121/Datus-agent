@@ -340,3 +340,31 @@ class TestAdapterFactoryWiring:
         adapter = semantic_adapter_registry.create_adapter("cube", config)
         assert isinstance(adapter, CubeAdapter)
         assert adapter.cube_config.api_url == "http://cube.local/cubejs-api/v1"
+
+
+@pytest.mark.asyncio
+class TestRowFilterInjection:
+    """M4.5 review fix: policy row_filters reach the Cube query payload."""
+
+    async def test_injected_filters_merge_into_query(self):
+        requests = []
+        adapter = _adapter_with_routes({
+            "/meta": _meta_payload(),
+            "/load": {"data": []},
+        }, requests=requests)
+        adapter.inject_row_filters([{"member": "Orders.region", "operator": "equals", "values": ["east"]}])
+        await adapter.query_metrics(metrics=["Orders.count"])
+        import json
+
+        body = json.loads(requests[-1].read())
+        filters = body["query"]["filters"]
+        assert {"member": "Orders.region", "operator": "equals", "values": ["east"]} in filters
+
+    async def test_no_injection_keeps_payload_clean(self):
+        requests = []
+        adapter = _adapter_with_routes({"/load": {"data": []}}, requests=requests)
+        await adapter.query_metrics(metrics=["Orders.count"])
+        import json
+
+        body = json.loads(requests[-1].read())
+        assert "filters" not in body["query"]

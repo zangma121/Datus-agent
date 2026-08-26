@@ -43,22 +43,29 @@ class Cond:
 
 
 def convert_rule_tree(script: Dict[str, Any]) -> Optional[Cond]:
-    """Convert one rule script; ``None`` = not convertible (deny)."""
+    """Convert one rule script; ``None`` = not convertible (deny).
+
+    Any child present but unconvertible makes the whole script
+    unconvertible — dropping it silently would widen the rule
+    (deny-by-default, per chat2agent semantics).
+    """
     children_raw = script.get("children") or []
+    if not children_raw:
+        return None
     converted: List[Cond] = []
     for child in children_raw:
         if not isinstance(child, dict):
-            continue
+            return None
         if "children" in child and child.get("children") is not None:
             nested = convert_rule_tree(child)
-            if nested is not None:
-                converted.append(nested)
+            if nested is None:
+                return None
+            converted.append(nested)
             continue
         leaf = _convert_leaf(child)
-        if leaf is not None:
-            converted.append(leaf)
-    if not converted:
-        return None
+        if leaf is None:
+            return None
+        converted.append(leaf)
     if len(converted) == 1:
         return converted[0]
     branch_op = str(script.get("ruleType") or "AND").upper()

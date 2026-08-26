@@ -23,9 +23,12 @@ from datus_semantic_core.models import (
     ValidationResult,
 )
 from datus.utils.exceptions import DatusException, ErrorCode
+from datus.utils.loggings import get_logger
 
 from datus_semantic_cube.client import CubeClient
 from datus_semantic_cube.config import CubeConfig
+
+logger = get_logger(__name__)
 
 #: Granularities Cube time dimensions accept, finest → coarsest.
 _TIME_GRANULARITIES = ["second", "minute", "hour", "day", "week", "month", "quarter", "year"]
@@ -57,6 +60,19 @@ class CubeAdapter(BaseSemanticAdapter):
         super().__init__(config, service_type="cube")
         self.cube_config = config
         self.client = client or CubeClient(config)
+        # Row-level policy filters injected by the policy runtime (M4.5);
+        # merged into every query payload until cleared.
+        self._row_filters: List[dict] = []
+
+    def inject_row_filters(self, filters: List[dict]) -> None:
+        """Accept row-scope filters exported by the policy runtime.
+
+        The gienbi-policy plugin computes them from GienBI row-permission
+        scripts; the adapter merges them into the query payload so row
+        scope is enforced inside Cube, not by rewriting SQL.
+        """
+        self._row_filters = list(filters or [])
+        logger.info("Cube adapter received %d row-scope filters", len(self._row_filters))
 
     # ── /meta helpers ────────────────────────────────────────────────
 
@@ -164,8 +180,14 @@ class CubeAdapter(BaseSemanticAdapter):
                 entry["granularity"] = time_granularity
             query["timeDimensions"] = [entry]
 
+        filters: List[dict] = []
         if where:
-            query["filters"] = [_parse_where_filter(where)]
+            filters.append(_parse_where_filter(where))
+        # Row-scope filters from the policy runtime ride along on every
+        # query (AND-combined with any user where).
+        filters.extend(self._row_filters)
+        if filters:
+            query["filters"] = filters
         if limit is not None:
             query["limit"] = int(limit)
         if order_by:
