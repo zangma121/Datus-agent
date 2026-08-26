@@ -46,6 +46,19 @@ class _SharedTableState:
         self.table: Optional[VectorTable] = None
 
 
+def _coerce_frame_timestamps(frame: pd.DataFrame) -> pd.DataFrame:
+    """Downcast ns-resolution datetime columns to ms for Lance schemas.
+
+    Lance timestamp columns are ms; pandas produces ns timestamps and
+    pyarrow refuses the lossy cast. Truncate (floor) — sub-ms precision is
+    never meaningful for these bookkeeping columns.
+    """
+    for col in frame.columns:
+        if pd.api.types.is_datetime64_any_dtype(frame[col]):
+            frame[col] = frame[col].astype("datetime64[ms]")
+    return frame
+
+
 class StorageBase:
     """Base class for all storage components using a vector backend."""
 
@@ -541,6 +554,17 @@ class BaseEmbeddingStore(StorageBase):
             except Exception as err:
                 error_message = str(err)
                 if "Commit conflict" not in error_message:
+                    if attempt == 0 and "Spill" in error_message:
+                        # Some lancedb builds fail inside merge_insert's rust
+                        # merge path (observed on arm64: "Spill has sent an
+                        # error"). Fall back to delete+insert — same upsert
+                        # semantics, no native merge.
+                        logger.warning(
+                            f"merge_insert failed with a native error on table '{self.table_name}' "
+                            f"({error_message[:120]}); falling back to delete+insert upsert"
+                        )
+                        self._fallback_upsert(frame, on_column)
+                        return
                     raise err
 
                 last_error = err
@@ -559,6 +583,25 @@ class BaseEmbeddingStore(StorageBase):
 
         assert last_error is not None  # for type checkers
         raise last_error
+
+    def _fallback_upsert(self, frame: pd.DataFrame, on_column: str) -> None:
+        """Delete-then-insert upsert used when native merge_insert fails."""
+        from datus_storage_base.conditions import in_
+
+        frame = _coerce_frame_timestamps(frame)
+        if on_column not in frame.columns or frame.empty:
+            self._add_with_retry(frame)
+            return
+        keys = [v for v in frame[on_column].tolist() if v not in (None, "")]
+        if keys:
+            self._delete_rows(in_(on_column, keys))
+        self.table = self.db.refresh_table(
+            self.table_name,
+            embedding_function=self.model.model,
+            vector_column=self.vector_column_name,
+            source_column=self.vector_source_name,
+        )
+        self._add_with_retry(frame)
 
     def _add_with_retry(self, frame: pd.DataFrame, max_attempts: int = 3, initial_delay: float = 0.05) -> None:
         """Insert a DataFrame with simple retry/backoff on commit conflicts."""

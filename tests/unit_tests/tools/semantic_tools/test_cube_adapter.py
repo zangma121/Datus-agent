@@ -294,7 +294,6 @@ class TestQueryMetrics:
         assert result.columns == []
 
 
-@pytest.mark.asyncio
 class TestValidateAndModels:
     async def test_validate_meta_reachable(self):
         adapter = _adapter_with_meta()
@@ -309,17 +308,17 @@ class TestValidateAndModels:
         with pytest.raises(DatusException):
             await adapter.validate_semantic()
 
-    async def test_cubes_listed_as_semantic_models(self):
+    def test_cubes_listed_as_semantic_models(self):
         adapter = _adapter_with_meta()
-        models = await adapter.list_semantic_models()
+        models = adapter.list_semantic_models()  # sync per interface contract
         assert [m.name for m in models] == ["Orders", "Users"]
 
-    async def test_single_model_lookup(self):
+    def test_single_model_lookup(self):
         adapter = _adapter_with_meta()
-        model = await adapter.get_semantic_model("Users")
+        model = adapter.get_semantic_model("Users")
         assert model is not None
         assert model.name == "Users"
-        assert await adapter.get_semantic_model("Missing") is None
+        assert adapter.get_semantic_model("Missing") is None
 
 
 class TestAdapterFactoryWiring:

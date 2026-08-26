@@ -239,40 +239,63 @@ class CubeAdapter(BaseSemanticAdapter):
         await self.client.get_meta(refresh=True)
         return ValidationResult(valid=True, issues=[])
 
-    # ── Semantic model interface (cubes) ─────────────────────────────
+    # ── Semantic model interface (cubes) — SYNC per the interface contract ──
 
-    async def list_semantic_models(
+    def list_semantic_models(
         self,
         catalog_name: str = "",
         database_name: str = "",
         schema_name: str = "",
     ) -> list:
-        from datus_semantic_core.models import SemanticModelInfo
+        import asyncio
 
-        cubes = await self._cubes()
-        return [self._model_info(cube) for cube in cubes]
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+        if loop is not None:
+            # Called from async context: run in a worker thread with its own
+            # loop (BaseSemanticAdapter keeps this method sync by contract).
+            import concurrent.futures
 
-    async def get_semantic_model(
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                return pool.submit(
+                    lambda: asyncio.run(self._list_semantic_models_async())
+                ).result()
+        return asyncio.run(self._list_semantic_models_async())
+
+    def get_semantic_model(
         self,
         table_name: str,
         catalog_name: str = "",
         database_name: str = "",
         schema_name: str = "",
     ):
-        from datus_semantic_core.models import SemanticModelInfo
-
-        for cube in await self._cubes():
-            if cube.get("name") == table_name:
-                return self._model_info(cube)
+        for model in self.list_semantic_models():
+            if model.name == table_name:
+                return model
         return None
+
+    async def _list_semantic_models_async(self) -> list:
+        cubes = await self._cubes()
+        return [self._model_info(cube) for cube in cubes]
 
     @staticmethod
     def _model_info(cube: dict):
         from datus_semantic_core.models import SemanticModelInfo
 
+        # storage_sync requires a physical table name; derive it from the
+        # cube's sql (``SELECT * FROM orders``) and fall back to cube name.
+        table_name = cube.get("name") or ""
+        sql = str(cube.get("sql") or "")
+        if sql:
+            match = re.search(r"from\s+([A-Za-z_][A-Za-z0-9_.]*)", sql, re.IGNORECASE)
+            if match:
+                table_name = match.group(1)
         return SemanticModelInfo(
             name=cube.get("name") or "",
             description=cube.get("title") or cube.get("description") or "",
+            table_name=table_name,
             dimensions=[
                 DimensionInfo(name=d.get("name") or "", type=d.get("type") or "string")
                 for d in cube.get("dimensions") or []
