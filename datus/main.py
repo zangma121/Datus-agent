@@ -179,6 +179,17 @@ def create_parser() -> argparse.ArgumentParser:
         parents=[global_parser],
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    generate_models_parser = subparsers.add_parser(
+        "generate-cube-models",
+        help="Generate cube .js models from datasource schema + samples (M7)",
+        parents=[global_parser],
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    generate_models_parser.add_argument("--datasource", required=True)
+    generate_models_parser.add_argument("--tables", type=str, default="", help="comma-separated table list; empty = all")
+    generate_models_parser.add_argument("--out", required=True, help="output directory for generated .js files")
+    generate_models_parser.add_argument("--sample-rows", type=int, default=5)
+    generate_models_parser.add_argument("--force", action="store_true", help="overwrite existing model files")
     bootstrap_parser.add_argument(
         "--kb_update_strategy",
         type=str,
@@ -545,6 +556,14 @@ def main():
 
     if args.action == "multi-round-benchmark":
         multi_benchmark(args)
+        return 0
+
+    if args.action == "generate-cube-models":
+        # M7: standalone generation — needs config + LLM, not the full Agent.
+        # Loads its own config because the shared **vars(args) kwargs don't fit it.
+        from datus_semantic_cube.generate_cli import run_generate
+
+        run_generate(args)
         return 0
 
     # Load agent configuration

@@ -41,11 +41,42 @@ BIRD_DEV = os.path.expanduser("~/.datus/benchmark/bird/dev_20240627/dev.json")
 
 
 def load_meta(adapter) -> str:
+    """Member listing WITH measure descriptions — descriptions are the
+    semantic anchor; names alone made the LLM guess (Q0 picked the wrong
+    member until descriptions were included)."""
+    import collections
+
+    metrics = asyncio.run(adapter.list_metrics(limit=10000))
+    by_cube = collections.OrderedDict()
+    dim_names = {m.name: m.dimensions for m in metrics}
+    all_dims = {}
+    for m in metrics:
+        by_cube.setdefault(m.path[0] if m.path else "?", []).append(m)
+        for d in m.dimensions or []:
+            all_dims[d] = d.split(".")[0]
+
+    # Dimensions via get_dimensions on first metric of each cube (cheap: cached /meta)
     lines = []
-    for cube in adapter.list_semantic_models():  # sync per adapter contract
-        lines.append(f"Cube {cube.name} (table {cube.table_name}):")
-        lines.append(f"  measures: {', '.join(cube.measures)}")
-        lines.append(f"  dimensions: {', '.join(d.name for d in cube.dimensions)}")
+    for cube_name, ms in by_cube.items():
+        lines.append(f"Cube {cube_name}:")
+        for m in ms:
+            desc = f" — {m.description}" if m.description else ""
+            lines.append(f"  measure {m.name}{desc}")
+    # dedupe dims across cubes
+    shown = set()
+    for cube_name, ms in by_cube.items():
+        if not ms:
+            continue
+        try:
+            dims = asyncio.run(adapter.get_dimensions(ms[0].name))
+        except Exception:
+            dims = []
+        for d in dims:
+            if d.name in shown:
+                continue
+            shown.add(d.name)
+            dtxt = " (time)" if d.is_primary_time else ""
+            lines.append(f"  dimension {d.name}{dtxt} [{cube_name}]")
     return "\n".join(lines)
 
 
