@@ -337,3 +337,46 @@
    `git merge main --no-commit --no-ff` 预检合并冲突面。
 4. 凭据纪律：Cube secret / GienBI MySQL 凭据只进环境变量，禁止进
    agent.yml/文档/测试 fixture 明文。
+
+---
+
+## M7（新增，2026-08-27 设计定稿）：datus 原生 Cube 模型生成
+
+**前提变更（用户拍板）**：GienBI 生产中模型不再由 Java 生成——datus 直接成为
+cube 模型的作者（未来可能经 datart 接口落库，现阶段 datus 内直接写文件）。
+据此 M5 的"手写 PoC"升级为正式特性：**schema+抽样 → LLM → 全自动生成完整
+可用的 cube .js 模型**。
+
+### 决策（grilling 4 轮确认）
+
+| # | 决策 | 结论 |
+|---|---|---|
+| D11 | 作者归属 | cube 模型由 datus 直接生成与维护；Java/datart 仅作为未来落库通道备注 |
+| D12 | 能力边界 | **全自动生成整份模型**：立方体划分、字段→维度/度量分类、主键识别、双语描述+别名全由 LLM 填充 |
+| D13 | JOIN 推断 | 包含：LLM 依据列名相似度+类型兼容性推断跨表 joins（含 belongsTo/hasOne 猜测），输出标注置信度供人工审 |
+| D14 | 入口形态 | CLI：`datus generate-cube-models --datasource X [--tables t1,t2] [--sample-rows N] --out <dir> --force`；每表一个 .js + `_generation_report.json`（LLM 失败/lint 问题全部留痕）；产出后结构 lint 校验 |
+| D15 | 护栏 | LLM=当前激活模型；描述双语；同名文件默认跳过（--force 才覆盖）；单表失败重试 1 次后留空不阻断整批；lint 不过标红 |
+
+### 启发式基线（实现按此，报告标注置信度）
+
+- 主键：列名匹配 `/(^|_)(id|code|key|cds)$/i` 且整表唯一 → primaryKey；
+  不确定时取首个非空唯一字符串列并标 low confidence。
+- 度量候选：数值类型且非主键 → SUM 型 measure；每 cube 附带 `<cube>Count`
+  count 度量；字符串枚举（distinct ≤50）仅作维度。
+- 维度采样：每列 top-N distinct 非空值（默认 N=5）喂 LLM。
+- JOIN：归一化列名相等（含单复数折叠）+ 类型兼容 → LLM 批量复核关系类型。
+
+### 任务切分
+
+| 任务 | 内容 |
+|---|---|
+| T7.1 | 生成器核心：分类器/描述 LLM 解析（容错重试）/JOIN 推断/lint/幂等与报告（TDD 单测全覆盖，LLM 可注入 fake） |
+| T7.2 | CLI 子命令接线 + 数据源 schema provider（sqlite/duckdb/postgres 三方言的最小列清单与采样 SQL） |
+| T7.3 | live 验收：对 bird_sqlite 的 california_schools 三表真实生成 → 起 cube 容器 → /meta 与样例查询双验证 |
+
+### 验收
+
+1. 单测全绿（fake LLM，覆盖分类/join/lint/幂等/报告五面）。
+2. 对真实库生成 california_schools 三模型，live 容器 /meta 含三 cube，
+   Q0 行级查询复测通过（对照金标三元组）。
+3. code review 双轴通过。
