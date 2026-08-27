@@ -367,3 +367,61 @@ class TestRowFilterInjection:
 
         body = json.loads(requests[-1].read())
         assert "filters" not in body["query"]
+
+
+@pytest.mark.asyncio
+class TestOrderByPrefix:
+    """M5 live finding: '-member' (the interface's descending convention)
+    must map to Cube's order dict, not pass through as a member name."""
+
+    async def test_dash_prefix_orders_desc(self):
+        requests = []
+        adapter = _adapter_with_routes({"/load": {"data": []}}, requests=requests)
+        await adapter.query_metrics(metrics=["Orders.count"], order_by=["-Orders.count"])
+        import json
+
+        query = json.loads(requests[-1].read())["query"]
+        assert query["order"] == {"Orders.count": "desc"}
+
+    async def test_bare_member_orders_asc(self):
+        requests = []
+        adapter = _adapter_with_routes({"/load": {"data": []}}, requests=requests)
+        await adapter.query_metrics(metrics=["Orders.count"], order_by=["Orders.status"])
+        import json
+
+        query = json.loads(requests[-1].read())["query"]
+        assert query["order"] == {"Orders.status": "asc"}
+
+
+class TestWhereFilterParsing:
+    """M5 finding: LLMs naturally emit IN and comparison filters; the
+    adapter's where parser handles equality, IN, and simple comparisons."""
+
+    def _parse(self, where):
+        from datus_semantic_cube.adapter import _parse_where_filter
+
+        return _parse_where_filter(where)
+
+    def test_equality(self):
+        assert self._parse("Schools.county = 'Alameda'") == {
+            "member": "Schools.county", "operator": "equals", "values": ["Alameda"]
+        }
+
+    def test_in_list(self):
+        assert self._parse("Schools.county IN ('Alameda', 'Los Angeles')") == {
+            "member": "Schools.county", "operator": "in", "values": ["Alameda", "Los Angeles"]
+        }
+
+    def test_numeric_comparison(self):
+        assert self._parse("Satscores.testTakers > 500") == {
+            "member": "Satscores.testTakers", "operator": "gt", "values": ["500"]
+        }
+
+    def test_not_equal(self):
+        assert self._parse("Schools.statusType != 'Closed'") == {
+            "member": "Schools.statusType", "operator": "notEquals", "values": ["Closed"]
+        }
+
+    def test_gte_lte(self):
+        assert self._parse("Satscores.avgMath >= 500")["operator"] == "gte"
+        assert self._parse("Satscores.avgMath <= 500")["operator"] == "lte"

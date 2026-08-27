@@ -33,24 +33,40 @@ logger = get_logger(__name__)
 #: Granularities Cube time dimensions accept, finest → coarsest.
 _TIME_GRANULARITIES = ["second", "minute", "hour", "day", "week", "month", "quarter", "year"]
 
-#: ``member = 'value'`` (single- or double-quoted) → Cube equals filter.
-_WHERE_EQ_RE = re.compile(r"^\s*([A-Za-z0-9_.]+)\s*=\s*['\"]([^'\"]*)['\"]\s*$")
+#: ``member = 'value'`` → equals; ``member IN ('a','b')`` → in;
+#: ``member OP number-or-'string'`` (=/!=/>/>=/</<=) → comparison operators.
+_WHERE_EQ_RE = re.compile(r"^\s*([A-Za-z0-9_.]+)\s*=\s*'([^']*)'\s*$")
+_WHERE_NE_RE = re.compile(r"^\s*([A-Za-z0-9_.]+)\s*!=\s*'([^']*)'\s*$")
+_WHERE_IN_RE = re.compile(r"^\s*([A-Za-z0-9_.]+)\s+IN\s*\(([^)]*)\)\s*$", re.IGNORECASE)
+_WHERE_CMP_RE = re.compile(r"^\s*([A-Za-z0-9_.]+)\s*(>=|<=|>|<)\s*([A-Za-z0-9_.-]+)\s*$")
+
+_CMP_OPS = {">": "gt", ">=": "gte", "<": "lt", "<=": "lte"}
 
 
 def _parse_where_filter(where: str) -> dict:
     match = _WHERE_EQ_RE.match(where)
-    if not match:
-        raise DatusException(
-            ErrorCode.SEMANTIC_ADAPTER_ERROR,
-            message_args={
-                "error_message": (
-                    f"Cube adapter only supports simple equality in `where` (e.g. "
-                    f"\"Cube.dim = 'value'\"), got: {where!r}. Use dimensions filters "
-                    "or a query template for anything richer."
-                )
-            },
-        )
-    return {"member": match.group(1), "operator": "equals", "values": [match.group(2)]}
+    if match:
+        return {"member": match.group(1), "operator": "equals", "values": [match.group(2)]}
+    match = _WHERE_NE_RE.match(where)
+    if match:
+        return {"member": match.group(1), "operator": "notEquals", "values": [match.group(2)]}
+    match = _WHERE_IN_RE.match(where)
+    if match:
+        values = [v.strip().strip("'\"") for v in match.group(2).split(",") if v.strip()]
+        return {"member": match.group(1), "operator": "in", "values": values}
+    match = _WHERE_CMP_RE.match(where)
+    if match:
+        return {"member": match.group(1), "operator": _CMP_OPS[match.group(2)], "values": [match.group(3)]}
+    raise DatusException(
+        ErrorCode.SEMANTIC_ADAPTER_ERROR,
+        message_args={
+            "error_message": (
+                f"Cube adapter supports equality, IN lists and simple comparisons in "
+                f"`where` (e.g. \"Cube.dim = 'v'\" / \"Cube.dim IN ('a','b')\" / "
+                f"\"Cube.measure > 500\"), got: {where!r}."
+            )
+        },
+    )
 
 
 class CubeAdapter(BaseSemanticAdapter):
@@ -193,11 +209,16 @@ class CubeAdapter(BaseSemanticAdapter):
         if order_by:
             order: dict = {}
             for item in order_by:
-                name, _, direction = item.strip().rpartition(" ")
+                item = str(item).strip()
+                if item.startswith("-"):
+                    # Interface convention: '-member' means descending.
+                    order[item[1:].strip()] = "desc"
+                    continue
+                name, _, direction = item.rpartition(" ")
                 if direction.lower() in ("asc", "desc"):
-                    order[name] = direction.lower()
+                    order[name.strip()] = direction.lower()
                 else:
-                    order[item.strip()] = "asc"
+                    order[item] = "asc"
             query["order"] = order
 
         if dry_run:
