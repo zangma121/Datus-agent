@@ -62,3 +62,20 @@ cube 引擎下 `attribution_analyze` 维持**降级为禁用**（设计 D-补充
 
 复现：`benchmark/scripts/cube_bird_eval.py --limit 30`（Cube 栈与模型
 见 `/tmp/cube-live/`，容器：cube-live/cubestore-live/cube-pg）。
+
+---
+
+## 附：Round-3 复测（2026-08-27，AND/HAVING 修复后）
+
+| 指标 | 二轮 | 三轮（本次） |
+|---|---|---|
+| 尝试执行 | 9/30 | 6/30 |
+| 构造失败 | 20 | 24（结构错误→长尾转移，见下） |
+| **正确** | **0** | **1（Q20）——直接映射路径首次得分** |
+| 耗时 | 53s | 38s（meta 缓存生效） |
+
+失败分层（24 题）：度量过滤 UserError 9、复杂操作符(BETWEEN/LIKE 等) 5、
+Invalid query format 9、其他 1。结论不变且更强：结构缺陷修复后立即产生
+正确答案；剩余为 (a) where 操作符/格式长尾、(b) 派生度量缺失与 Total
+后缀命名与 LLM 直觉的错位、(c) 模型覆盖广度。均已挂 backlog
+（B1 别名成列 / B2 描述进 prompt 的延续调优 / 新增 E1: LLM 成员名对齐器）。
