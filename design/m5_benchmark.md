@@ -23,6 +23,9 @@ BIRD california_schools 三表灌入 + 手工 Cube 模型）
 
 **数值正确性锚点**：Q0（Alameda 县 K-12 最高免费餐比例）Cube 结果
 1.0 / 0.9833 / 0.9829 与金标完全一致——映射正确时语义层数值可靠。
+（更正：早先记录的"校名与金标不同"是我手工对照时误加了
+`StatusType='Active'` 过滤所致；BIRD 金标无此过滤，纯 frpm 表按比率
+排序的第一名即 Oakland Community Day Middle，两种路径完全一致。）
 
 ## 分析（结论按重要性排序）
 

@@ -51,9 +51,9 @@
 |---|---|---|
 | Enrollment (K-12) | REAL | K-12 入学人数（分母） |
 | Free Meal Count (K-12) | REAL | K-12 免费餐人数（分子；第 0/21 题考点） |
-| Percent (%) Eligible Free (K-12) | REAL | 免费餐资格比例%（0-100！金标不用它、自己除出 0-1 小数——**单位陷阱**） |
+| Percent (%) Eligible Free (K-12) | REAL | 免费餐资格比例（**实测本表存 0-1 小数**，虽列名带 % 号；已逐行核对 379 行与 Count÷Enrollment 完全等价——直接用此列安全） |
 | FRPM Count (K-12) | REAL | 免费+减价餐总人数（第 3/8/10 题的 "FRPM count"） |
-| Percent (%) Eligible FRPM (K-12) | REAL | FRPM 资格比例% |
+| Percent (%) Eligible FRPM (K-12) | REAL | FRPM 资格比例（同为 0-1 小数） |
 | *(第三行同构)* | — | （每组计数列紧跟一列现成比率列） |
 
 ## 核心：Ages 5-17 系列指标（与上组完全对称）
@@ -80,7 +80,7 @@
 | free meals vs free or reduced price meals | Free Meal Count vs FRPM Count | "免费餐"≠"免费+减价餐"，第 21 题两个条件分别取不同列 |
 | continuation school（续读学校） | Educational Option Type = 'Continuation School' | 不是 School Type |
 | direct charter-funded（直接拨款特许校） | Charter Funding Type = 'Directly funded' + Charter School (Y/N)=1 | 常组合出现（第 4 题） |
-| percent eligible ... more than 0.1 | 自己除（0.1 = 10%） | 若用 Percent(%) 列阈值应是 10——第 24 题等单位陷阱 |
+| percent eligible ... more than 0.1 | Percent(%) 列即 0-1 小数，可直接比较 | 第 24 题阈值 0.1 直接用（实测修正：此表无百分/小数单位陷阱） |
 | enrollment difference K-12 与 Ages 5-17 | 两列相减（第 11/23/28 题） | 跨"两组指标"比较题 |
 | High Schools (Public)（公立高中） | School Type 完整值匹配 | 模糊说"high school"时要精确到全串（第 26 题） |
 
