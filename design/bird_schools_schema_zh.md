@@ -73,7 +73,7 @@
 | EILName | TEXT | 教育层次名称 |
 | GSoffered | TEXT | 提供的年级跨度（K-8、K-12 …） |
 | GSserved | TEXT | 实际服务的年级跨度 |
-| Virtual | TEXT | 虚拟办学形式（F=完全线下 / P=部分线上） |
+| Virtual | TEXT | 授课形式：**F=完全虚拟（Fully virtual，全远程）/ P=部分虚拟 / N=传统线下**。⚠️ 我最初把它误注为“F=False 即非虚拟”——经抽样+LLM 归纳并与 BIRD evidence 交叉验证：第 5 题 “exclusively virtual refers to Virtual='F'” 意为完全远程授课的学校。凭首字母直觉猜必错 |
 | Magnet | INTEGER | 是否磁校或提供磁石项目（1=是 / 0=否） |
 | Latitude | REAL | 纬度 |
 | Longitude | REAL | 经度 |
