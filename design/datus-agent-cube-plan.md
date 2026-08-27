@@ -390,3 +390,21 @@ cube 模型的作者（未来可能经 datart 接口落库，现阶段 datus 内
 - 维度描述尚未进 load_meta 的 prompt 清单（度量描述已进）——维度类问题
   命中率提升时补；
 - CLI lint 失败仅报告不改退出码（脚本化消费者注意）。
+
+
+---
+
+## 后续优化方向（Backlog，2026-08-27 收口汇总）
+
+按价值/成本排序，均已有明确的实现锚点：
+
+| # | 方向 | 锚点 | 触发条件 |
+|---|---|---|---|
+| B1 | **模型 alias 单独成列**：目前 LLM 生成的别名折叠在 description 字符串里（"Aliases: ..."）；应在 cube 模型/KB 层支持独立别名列表字段，提升向量检索的精确命中 | `datus_semantic_cube/generate.py` 描述渲染处；metric store 增 aliases 列 | 中文问数命中率成为瓶颈时 |
+| B2 | **维度描述进 prompt 清单**：load_meta（实验 runner）与生产 SemanticTools 的 meta 组装目前只带度量描述；维度描述已在 /meta 可得，补齐即提升维度类过滤条件的选型准确率 | 本分支 M5 lang-A/B 实验已证明语言影响成员选择 | 维度类问题误选增多时 |
+| B3 | **join verified_by 枚举细化**：LLM 无 verdict 时降级开放（heuristic-unverified），可选配置为降级严格（拒绝）以匹配安全场景 | `generate.py` join 确认循环 | 权限敏感租户启用自动建模时 |
+| B4 | **CLI lint 失败改退出码**：当前仅报告 lint_failed，脚本化消费者拿不到非零退出信号 | generate_cli.run_generate 返回值 + main dispatch | CI 中使用生成命令时 |
+| B5 | **datart 写入接口对接**：用户拍板的未来通道——datus 生成的模型经 datart API 落库而非写本地文件，替换 D11 的"直接写文件"形态 | 依赖 datart 侧接口定义 | GienBI 生产接入时 |
+| B6 | **多租户 cubeOrgId live 验证**：cubeOrgId={org}A JWT 路径需 GienBI bank 栈才能端到端验证 | datus_semantic_cube/token.py 已实现单测覆盖 | bank 栈可用时 |
+| B7 | **权限矩阵 E2E + query_metrics 结果屏蔽接线**：M4 遗留，需真实 GienBI MySQL；主体模型 USER/ROLE/DEPT 并集已实现待真实数据回归 | tests/e2e/test_permission_matrix.py 占位 | 接真实权限库时 |
+| B8 | **上游 PR 系列**：5 个可贡献点——CLI help 吞错、bird 测试 hermetic 化、SQL 回收兜底、lance merge_insert 失败降级、duckdb:/// 路径翻倍修复 | 各自提交已在本分支 | 与上游协调时批量提 |
