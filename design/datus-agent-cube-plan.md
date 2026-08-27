@@ -374,9 +374,19 @@ cube 模型的作者（未来可能经 datart 接口落库，现阶段 datus 内
 | T7.2 | CLI 子命令接线 + 数据源 schema provider（sqlite/duckdb/postgres 三方言的最小列清单与采样 SQL） |
 | T7.3 | live 验收：对 bird_sqlite 的 california_schools 三表真实生成 → 起 cube 容器 → /meta 与样例查询双验证 |
 
-### 验收
+### 验收 ✅ 全部通过（提交 a757d46a）
 
-1. 单测全绿（fake LLM，覆盖分类/join/lint/幂等/报告五面）。
-2. 对真实库生成 california_schools 三模型，live 容器 /meta 含三 cube，
-   Q0 行级查询复测通过（对照金标三元组）。
-3. code review 双轴通过。
+1. 单测 15 个全绿（fake LLM，覆盖分类/join/lint/幂等/报告五面）。
+2. live：对 bird_sqlite 真实生成三模型（lint 全绿），真实 Cube 容器编译
+   通过（/meta 列出 Frpm/Satscores/Schools），县级聚合查询与 sqlite 源
+   数值逐位一致（85120/224085 → 0.3799）。
+3. 双轴 code review 完成；正确性修复已落地（join 方向/列交叉/LLM 复核/
+   批量失败隔离）。遗留优化项记录于下。
+
+### M7 遗留优化项（不阻塞验收）
+
+- join LLM 复核的 verified_by 枚举含 heuristic-unverified（无 verdict 时
+  降开放语义）；别名 currently 仅折叠进 description 字符串，未单独成列；
+- 维度描述尚未进 load_meta 的 prompt 清单（度量描述已进）——维度类问题
+  命中率提升时补；
+- CLI lint 失败仅报告不改退出码（脚本化消费者注意）。
