@@ -2,6 +2,12 @@
 
 日期：2026-08-26 ｜ 分支：`datus-agent-cube` ｜ 依据：`design/datus-agent-cube.md`（grilling 10/10 确认版）
 
+> **终态（2026-08-27）**：M0–M5 全部完成。单测 ~18000 绿（5 个文件为
+> 环境性存量失败被排除）；M2.6/T3.5 经本机自包含 Cube 栈 live 验证；
+> M5 评估报告见 `design/m5_benchmark.md`。28 个提交。剩余开放项：
+> 多租户 cubeOrgId 需 GienBI bank 栈验证；权限矩阵 E2E 需真实
+> GienBI MySQL；query_metrics 结果形态屏蔽接线待生产确认。
+
 任务分解规则：每个任务独立可提交、可验收（先跑验证再提交）；文件路径均为
 `/Users/zm/Code/Datus-agent` 仓库内相对路径；`~` 指用户家目录。里程碑 M0–M6
 对应设计文档第 6 节；任务编号 `T<里程碑>.<序号>`。
