@@ -425,3 +425,42 @@ class TestWhereFilterParsing:
     def test_gte_lte(self):
         assert self._parse("Satscores.avgMath >= 500")["operator"] == "gte"
         assert self._parse("Satscores.avgMath <= 500")["operator"] == "lte"
+
+
+@pytest.mark.asyncio
+class TestMultiConditionAndHaving:
+    """M5-round3 findings: most mapping failures were (a) AND-chained
+    wheres rejected outright and (b) measure-valued conditions placed into
+    WHERE causing nested-aggregate SQL. Route measure members to Cube's
+    havingFilters."""
+
+    async def test_and_chain_splits_into_two_filters(self):
+        requests = []
+        adapter = _adapter_with_routes({"/meta": _meta_payload(), "/load": {"data": []}}, requests=requests)
+        await adapter.query_metrics(
+            metrics=["Orders.count"],
+            dimensions=["Orders.status"],
+            where="Schools.county = 'Alameda' AND Schools.statusType IN ('Active','Closed')",
+        )
+        import json
+
+        query = json.loads(requests[-1].read())["query"]
+        assert len(query["filters"]) == 2
+
+    async def test_measure_condition_routes_to_having(self):
+        requests = []
+        adapter = _adapter_with_routes({
+            "/meta": _meta_payload(),
+            "/load": {"data": [{"Orders.count": 7}]},
+        }, requests=requests)
+        await adapter.query_metrics(
+            metrics=["Orders.count"],
+            where="Orders.count > 5",
+        )
+        import json
+
+        body = json.loads(requests[-1].read())["query"]
+        assert body.get("havingFilters") == [
+            {"member": "Orders.count", "operator": "gt", "values": ["5"]}
+        ]
+        assert "filters" not in body

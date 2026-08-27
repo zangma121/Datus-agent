@@ -43,6 +43,31 @@ _WHERE_CMP_RE = re.compile(r"^\s*([A-Za-z0-9_.]+)\s*(>=|<=|>|<)\s*([A-Za-z0-9_.-
 _CMP_OPS = {">": "gt", ">=": "gte", "<": "lt", "<=": "lte"}
 
 
+def _split_and_conditions(where: str) -> List[str]:
+    """Split a where string on top-level AND (case-insensitive)."""
+    import re as _re
+
+    return [part.strip() for part in _re.split(r"\s+AND\s+", where, flags=_re.IGNORECASE) if part.strip()]
+
+
+async def _measure_members(client, requested: List[str]) -> set:
+    """Measure member names across the cubes involved (cached /meta);
+    restricted to cubes referenced by the query's measures."""
+    try:
+        meta = await client.get_meta()
+    except Exception:  # noqa: BLE001 - classification best-effort
+        return set()
+    wanted_cubes = {m.split(".")[0] for m in requested if "." in m}
+    members = set()
+    for cube in meta.get("cubes", []):
+        if cube.get("name") not in wanted_cubes:
+            continue
+        for m in cube.get("measures") or []:
+            if isinstance(m, dict) and m.get("name"):
+                members.add(m["name"])
+    return members
+
+
 def _parse_where_filter(where: str) -> dict:
     match = _WHERE_EQ_RE.match(where)
     if match:
@@ -196,14 +221,24 @@ class CubeAdapter(BaseSemanticAdapter):
                 entry["granularity"] = time_granularity
             query["timeDimensions"] = [entry]
 
-        filters: List[dict] = []
-        if where:
-            filters.append(_parse_where_filter(where))
-        # Row-scope filters from the policy runtime ride along on every
-        # query (AND-combined with any user where).
-        filters.extend(self._row_filters)
-        if filters:
-            query["filters"] = filters
+        # Conditions split on top-level AND; measure-valued members go to
+        # havingFilters (WHERE on aggregates is illegal SQL), dimension
+        # members stay in filters.
+        conditions = _split_and_conditions(where) if where else []
+        parsed = [_parse_where_filter(cond) for cond in conditions]
+        filter_entries: List[dict] = [f for f in self._row_filters]
+        having: List[dict] = []
+        if parsed:
+            measure_members = await _measure_members(self.client, metrics)
+            for entry in parsed:
+                if entry["member"] in measure_members:
+                    having.append(entry)
+                else:
+                    filter_entries.append(entry)
+        if filter_entries:
+            query["filters"] = filter_entries
+        if having:
+            query["havingFilters"] = having
         if limit is not None:
             query["limit"] = int(limit)
         if order_by:
