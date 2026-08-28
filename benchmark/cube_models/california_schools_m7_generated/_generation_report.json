@@ -1,0 +1,41 @@
+{
+ "schools": {
+  "status": "generated",
+  "descriptions_failed": 49,
+  "primary_key": "CDSCode",
+  "pk_confidence": "low (fallback first string column)",
+  "lint": {
+   "ok": true,
+   "issues": []
+  },
+  "joins": {
+   "frpm": {
+    "relationship": "belongsTo",
+    "verified_by": "heuristic",
+    "on": "frpm.CDSCode = schools.CDSCode"
+   }
+  }
+ },
+ "frpm": {
+  "status": "generated",
+  "descriptions_failed": 29,
+  "primary_key": "CDSCode",
+  "pk_confidence": "low (fallback first string column)",
+  "lint": {
+   "ok": true,
+   "issues": []
+  },
+  "joins": {}
+ },
+ "satscores": {
+  "status": "generated",
+  "descriptions_failed": 0,
+  "primary_key": "cds",
+  "pk_confidence": "low (no uniqueness metadata)",
+  "lint": {
+   "ok": true,
+   "issues": []
+  },
+  "joins": {}
+ }
+}

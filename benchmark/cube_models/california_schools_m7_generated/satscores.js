@@ -1,0 +1,25 @@
+cube(`Satscores`, {
+  sql: `SELECT * FROM satscores`,
+  measures: {
+    satscoresCount: { sql: `1`, type: `count` },
+    enroll12Total: { sql: `CAST("enroll12" AS DOUBLE PRECISION)`, type: `sum`, description: "Enrollment count for grades 12, representing the number of 12th-grade students. 12\u5e74\u7ea7\u5b66\u751f\u4eba\u6570\uff0c\u4ee3\u886812\u5e74\u7ea7\u5b66\u751f\u7684\u6570\u91cf\u3002" },
+    NumTstTakrTotal: { sql: `CAST("NumTstTakr" AS DOUBLE PRECISION)`, type: `sum`, description: "Number of Test Takers, the total count of students who took the SAT exam. \u8003\u751f\u4eba\u6570\uff0c\u53c2\u52a0SAT\u8003\u8bd5\u7684\u5b66\u751f\u603b\u6570\u3002" },
+    AvgScrReadTotal: { sql: `CAST("AvgScrRead" AS DOUBLE PRECISION)`, type: `sum`, description: "Average Reading Score, the mean score achieved by students in the Reading section. \u9605\u8bfb\u5e73\u5747\u5206\uff0c\u5b66\u751f\u5728\u9605\u8bfb\u90e8\u5206\u53d6\u5f97\u7684\u5e73\u5747\u5206\u6570\u3002" },
+    AvgScrMathTotal: { sql: `CAST("AvgScrMath" AS DOUBLE PRECISION)`, type: `sum`, description: "Average Math Score, the mean score achieved by students in the Math section. \u6570\u5b66\u5e73\u5747\u5206\uff0c\u5b66\u751f\u5728\u6570\u5b66\u90e8\u5206\u53d6\u5f97\u7684\u5e73\u5747\u5206\u6570\u3002" },
+    AvgScrWriteTotal: { sql: `CAST("AvgScrWrite" AS DOUBLE PRECISION)`, type: `sum`, description: "Average Writing Score, the mean score achieved by students in the Writing section. \u5199\u4f5c\u5e73\u5747\u5206\uff0c\u5b66\u751f\u5728\u5199\u4f5c\u90e8\u5206\u53d6\u5f97\u7684\u5e73\u5747\u5206\u6570\u3002" },
+    NumGE1500Total: { sql: `CAST("NumGE1500" AS DOUBLE PRECISION)`, type: `sum`, description: "Number of Students with Total Score >= 1500, the count of students whose combined SAT score is 1500 or higher. \u603b\u5206\u5927\u4e8e\u7b49\u4e8e1500\u5206\u7684\u5b66\u751f\u4eba\u6570\uff0c\u6307SAT\u603b\u5206\u8fbe\u52301500\u5206\u53ca\u4ee5\u4e0a\u7684\u5b66\u751f\u6570\u91cf\u3002" },
+  },
+  dimensions: {
+    cds: { sql: `"cds"`, type: `string`, primaryKey: true, description: "California Department of Education School Code, a unique 14-digit identifier for each school. \u52a0\u5dde\u6559\u80b2\u90e8\u5b66\u6821\u4ee3\u7801\uff0c\u6bcf\u4e2a\u5b66\u6821\u7684\u552f\u4e0014\u4f4d\u6807\u8bc6\u7b26\u3002" },
+    rtype: { sql: `"rtype"`, type: `string`, description: "Report Type, where 'D' stands for District and 'S' stands for School. \u62a5\u544a\u7c7b\u578b\uff0c'D'\u4ee3\u8868\u5b66\u533a\uff0c'S'\u4ee3\u8868\u5b66\u6821\u3002" },
+    sname: { sql: `"sname"`, type: `string`, description: "School Name, the official name of the educational institution. \u5b66\u6821\u540d\u79f0\uff0c\u6559\u80b2\u673a\u6784\u7684\u5168\u79f0\u3002" },
+    dname: { sql: `"dname"`, type: `string`, description: "District Name, the name of the school district the school belongs to. \u5b66\u533a\u540d\u79f0\uff0c\u5b66\u6821\u6240\u5c5e\u5b66\u533a\u7684\u540d\u79f0\u3002" },
+    cname: { sql: `"cname"`, type: `string`, description: "County Name, the name of the county where the school is located. \u53bf\u540d\uff0c\u5b66\u6821\u6240\u5728\u53bf\u7684\u540d\u79f0\u3002" },
+    enroll12: { sql: `"enroll12"`, type: `number`, description: "Enrollment count for grades 12, representing the number of 12th-grade students. 12\u5e74\u7ea7\u5b66\u751f\u4eba\u6570\uff0c\u4ee3\u886812\u5e74\u7ea7\u5b66\u751f\u7684\u6570\u91cf\u3002" },
+    NumTstTakr: { sql: `"NumTstTakr"`, type: `number`, description: "Number of Test Takers, the total count of students who took the SAT exam. \u8003\u751f\u4eba\u6570\uff0c\u53c2\u52a0SAT\u8003\u8bd5\u7684\u5b66\u751f\u603b\u6570\u3002" },
+    AvgScrRead: { sql: `"AvgScrRead"`, type: `number`, description: "Average Reading Score, the mean score achieved by students in the Reading section. \u9605\u8bfb\u5e73\u5747\u5206\uff0c\u5b66\u751f\u5728\u9605\u8bfb\u90e8\u5206\u53d6\u5f97\u7684\u5e73\u5747\u5206\u6570\u3002" },
+    AvgScrMath: { sql: `"AvgScrMath"`, type: `number`, description: "Average Math Score, the mean score achieved by students in the Math section. \u6570\u5b66\u5e73\u5747\u5206\uff0c\u5b66\u751f\u5728\u6570\u5b66\u90e8\u5206\u53d6\u5f97\u7684\u5e73\u5747\u5206\u6570\u3002" },
+    AvgScrWrite: { sql: `"AvgScrWrite"`, type: `number`, description: "Average Writing Score, the mean score achieved by students in the Writing section. \u5199\u4f5c\u5e73\u5747\u5206\uff0c\u5b66\u751f\u5728\u5199\u4f5c\u90e8\u5206\u53d6\u5f97\u7684\u5e73\u5747\u5206\u6570\u3002" },
+    NumGE1500: { sql: `"NumGE1500"`, type: `number`, description: "Number of Students with Total Score >= 1500, the count of students whose combined SAT score is 1500 or higher. \u603b\u5206\u5927\u4e8e\u7b49\u4e8e1500\u5206\u7684\u5b66\u751f\u4eba\u6570\uff0c\u6307SAT\u603b\u5206\u8fbe\u52301500\u5206\u53ca\u4ee5\u4e0a\u7684\u5b66\u751f\u6570\u91cf\u3002" },
+  },
+});
