@@ -408,3 +408,4 @@ cube 模型的作者（未来可能经 datart 接口落库，现阶段 datus 内
 | B6 | **多租户 cubeOrgId live 验证**：cubeOrgId={org}A JWT 路径需 GienBI bank 栈才能端到端验证 | datus_semantic_cube/token.py 已实现单测覆盖 | bank 栈可用时 |
 | B7 | **权限矩阵 E2E + query_metrics 结果屏蔽接线**：M4 遗留，需真实 GienBI MySQL；主体模型 USER/ROLE/DEPT 并集已实现待真实数据回归 | tests/e2e/test_permission_matrix.py 占位 | 接真实权限库时 |
 | B8 | **上游 PR 系列**：5 个可贡献点——CLI help 吞错、bird 测试 hermetic 化、SQL 回收兜底、lance merge_insert 失败降级、duckdb:/// 路径翻倍修复 | 各自提交已在本分支 | 与上游协调时批量提 |
+| ~~B9~~ | ✅ 已实现（75d5b6d8）：纯维度点查/维度排序一等公民——空 metrics 省略 measures 键、维度策略门禁跳过；原"维度侧行权限"拆为新待办 | semantic_tools/adapter | 已合入 |
