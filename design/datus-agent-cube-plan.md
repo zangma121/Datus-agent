@@ -409,3 +409,35 @@ cube 模型的作者（未来可能经 datart 接口落库，现阶段 datus 内
 | B7 | **权限矩阵 E2E + query_metrics 结果屏蔽接线**：M4 遗留，需真实 GienBI MySQL；主体模型 USER/ROLE/DEPT 并集已实现待真实数据回归 | tests/e2e/test_permission_matrix.py 占位 | 接真实权限库时 |
 | B8 | **上游 PR 系列**：5 个可贡献点——CLI help 吞错、bird 测试 hermetic 化、SQL 回收兜底、lance merge_insert 失败降级、duckdb:/// 路径翻倍修复 | 各自提交已在本分支 | 与上游协调时批量提 |
 | ~~B9~~ | ✅ 已实现（75d5b6d8）：纯维度点查/维度排序一等公民——空 metrics 省略 measures 键、维度策略门禁跳过；原"维度侧行权限"拆为新待办 | semantic_tools/adapter | 已合入 |
+
+---
+
+## M8（新增，2026-08-27 设计定稿）：OSI YAML → Cube JS 转换器
+
+**设计前提（用户拍板）**：datus 直接成为 cube 模型作者后，模型源统一为
+OSI YAML（dosi/metricflow 已原生消费）——Cube 引擎通过**转换器**复用同一
+模型源，消灭双份手写模型。M7 的 schema+采样 LLM 生成器降级为"无 YAML 时的
+冷启动路径"。
+
+### 决策（grilling 3 轮确认）
+
+| # | 决策 | 结论 |
+|---|---|---|
+| T-D1 | 度量映射 | 直映射（sql=expr、type=agg 映射 SUM→sum/AVG→average/COUNT_DISTINCT→count_distinct）；**含运算符的派生 expr 双发**：聚合口径 measure（叶子列按 OSI agg 包聚合）+ 同名行级 dimension（PerRow 后缀，M5 最高/最低类问题必需） |
+| T-D2 | CLI | 同命令 --from-osi <yaml目录>（确定性转换，无 LLM/采样），复用 lint/报告/幂等 |
+| T-D3 | JOIN/边界 | 同名 PRIMARY identifier 跨 cube → belongsTo（后缀序）；TIME 维度降级普通维度；mutability/多数据源段忽略并报告标注 |
+
+### 任务
+
+| 任务 | 内容 |
+|---|---|
+| T8.1 | transpile.py：YAML 解析/度量映射（含双发）/identifier join/TIME 降级/描述透传，复用 lint_model_text（TDD） |
+| T8.2 | CLI --from-osi 接线 + 报告复用 |
+| T8.3 | 真实验证：transpile bird_school frpm.yml → live 容器 /meta + 查询对照手写版 |
+
+### 验收
+
+1. 单测覆盖：度量映射/双发/identifier join/TIME 降级/描述含别名透传/lint 通过。
+2. 真实 YAML（tests/data/semantic_models/bird_school/frpm.yml）转换产物部署后
+   /meta 可见、查询数值与 sqlite 一致。
+3. review 双轴通过。
