@@ -190,6 +190,12 @@ def create_parser() -> argparse.ArgumentParser:
     generate_models_parser.add_argument("--out", required=True, help="output directory for generated .js files")
     generate_models_parser.add_argument("--sample-rows", type=int, default=5)
     generate_models_parser.add_argument("--force", action="store_true", help="overwrite existing model files")
+    generate_models_parser.add_argument(
+        "--from-osi",
+        type=str,
+        default="",
+        help="Transpile OSI YAML files from this directory (deterministic, no LLM) instead of schema+sample generation",
+    )
     bootstrap_parser.add_argument(
         "--kb_update_strategy",
         type=str,
@@ -559,8 +565,10 @@ def main():
         return 0
 
     if args.action == "generate-cube-models":
-        # M7: standalone generation — needs config + LLM, not the full Agent.
-        # Loads its own config because the shared **vars(args) kwargs don't fit it.
+        # M7/M8: two sources — --from-osi transpiles OSI YAML deterministically
+        # (no LLM, no datasource); otherwise schema+sample LLM generation.
+        # Both need config/LLM wiring only for the latter, but the loader
+        # kwargs differ from **vars(args), so both branch before the load.
         from datus_semantic_cube.generate_cli import run_generate
 
         run_generate(args)

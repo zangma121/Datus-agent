@@ -124,6 +124,19 @@ def make_llm_fn(agent_config) -> Callable[[str, str], str]:
 
 def run_generate(args) -> Dict[str, Any]:
     """Entry point wired into datus/main.py dispatch."""
+    # M8: --from-osi transpiles OSI YAML deterministically (no LLM, no DB).
+    if getattr(args, "from_osi", None):
+        from datus_semantic_cube.transpile import transpile_dir
+
+        models = transpile_dir(args.from_osi, out_dir=args.out, overwrite=args.force)
+        summary = {
+            m["table_name"]: {"status": m["report"]["status"], "lint": m["report"]["lint"]["ok"]}
+            for m in models
+        }
+        print(json.dumps(summary, indent=1))
+        logger.info("generate-cube-models (from-osi) completed: %s", summary)
+        return summary
+
     from datus.configuration.agent_config_loader import load_agent_config
     from datus.tools.db_tools.db_manager import DBManager
     from datus_semantic_cube.generate import CubeModelGenerator
