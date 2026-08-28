@@ -464,3 +464,25 @@ class TestMultiConditionAndHaving:
             {"member": "Orders.count", "operator": "gt", "values": ["5"]}
         ]
         assert "filters" not in body
+
+
+@pytest.mark.asyncio
+class TestDimensionOnlyQuery:
+    """构建层修正：纯维度点查合法——payload 不得携带 measures 键。"""
+
+    async def test_payload_omits_measures_key(self):
+        requests = []
+        adapter = _adapter_with_routes({"/load": {"data": [{"School": "X"}]}}, requests=requests)
+        r = await adapter.query_metrics(
+            metrics=[],
+            dimensions=["Frpm.schoolName", "Frpm.eligibleFreeRateK12"],
+            where="Frpm.countyName = 'Alameda'",
+            order_by=["-Frpm.eligibleFreeRateK12"],
+            limit=1,
+        )
+        import json
+
+        body = json.loads(requests[-1].read())["query"]
+        assert "measures" not in body
+        assert body["dimensions"] == ["Frpm.schoolName", "Frpm.eligibleFreeRateK12"]
+        assert r.data

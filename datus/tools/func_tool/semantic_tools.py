@@ -1014,8 +1014,13 @@ class SemanticTools:
         When using limit for Top N/Bottom N, also pass order_by so the
         truncation has stable business meaning.
 
+        Dimension-only queries are allowed (point lookups and
+        rank-by-dimension): pass dimensions with an empty metrics list and an
+        order_by over a dimension member.
+
         Args:
-            metrics: List of metric names to query
+            metrics: List of metric names to query (may be empty when the
+                     question is answered by dimensions alone)
             dimensions: Optional list of dimensions to group by (from get_dimensions).
                         With Dosi, use reserved `metric_time` for the selected metric's
                         primary time axis and pass its grain via `time_granularity`.
@@ -1047,12 +1052,14 @@ class SemanticTools:
         if error:
             return error
 
-        if not metrics:
+        if not metrics and not dimensions:
             return FuncToolResult(
                 success=0,
                 error=(
-                    "query_metrics requires at least one metric name. "
-                    "Call list_metrics first and pass one or more metric names exactly as returned."
+                    "query_metrics requires at least one metric name, or one or more "
+                    "dimensions for a point-lookup/rank-by-dimension query. "
+                    "Call list_metrics (or get_dimensions) first and pass member names "
+                    "exactly as returned."
                 ),
             )
 
@@ -1071,54 +1078,63 @@ class SemanticTools:
         try:
             # Metric-level policy gate (M4): plugins may filter the metric
             # list or refuse the read outright (missing tenant identity).
+            # Dimension-only queries skip the metric gate (nothing to gate);
+            # row/column policy still applies downstream.
             from datus.tools.policy_runtime import PolicyRuntime
 
             policy_context = getattr(self.agent_config, "policy_context", None)
             policy_context = dict(policy_context) if isinstance(policy_context, dict) else {}
             datasource = getattr(adapter, "datasource", "") or ""
-            decision = PolicyRuntime(self.agent_config).before_metric_read(
-                metrics, datasource=datasource, policy_context=policy_context
-            )
+            if metrics:
+                decision = PolicyRuntime(self.agent_config).before_metric_read(
+                    metrics, datasource=datasource, policy_context=policy_context
+                )
+            else:
+                decision = None
             # The gienbi plugin returns plain dicts; normalize for uniform access.
             if isinstance(decision, dict):
                 from types import SimpleNamespace
 
                 decision = SimpleNamespace(**decision)
-            if not decision.allowed:
-                return FuncToolResult(
-                    success=0,
-                    error=f"Metric query denied by policy: {decision.reason or 'no reason given'}",
-                )
-            if not decision.allowed_metrics:
-                denied_names = ", ".join(d.get("metric", "?") for d in decision.denied) or "all requested metrics"
-                return FuncToolResult(
-                    success=0,
-                    error=f"No permitted metrics remain after policy filtering (denied: {denied_names}).",
-                )
-            if decision.allowed_metrics != metrics:
-                denied_names = ", ".join(d.get("metric", "?") for d in decision.denied)
-                logger.info(f"Policy filtered metrics for query_metrics: {denied_names}")
-                metrics = decision.allowed_metrics
+            if decision is not None:
+                if not decision.allowed:
+                    return FuncToolResult(
+                        success=0,
+                        error=f"Metric query denied by policy: {decision.reason or 'no reason given'}",
+                    )
+                if not decision.allowed_metrics:
+                    denied_names = ", ".join(d.get("metric", "?") for d in decision.denied) or "all requested metrics"
+                    return FuncToolResult(
+                        success=0,
+                        error=f"No permitted metrics remain after policy filtering (denied: {denied_names}).",
+                    )
+                if decision.allowed_metrics != metrics:
+                    denied_names = ", ".join(d.get("metric", "?") for d in decision.denied)
+                    logger.info(f"Policy filtered metrics for query_metrics: {denied_names}")
+                    metrics = decision.allowed_metrics
 
-            # Row-level scope gate (M4.5): for metric-query paths this is the
-            # data path — before_sql_read runs here, and on the cube engine
-            # its row_filters are forwarded for adapter injection.
-            sql_decision = PolicyRuntime(self.agent_config).before_sql_read(
-                f"SELECT 1 FROM {path[0] if path else 'metrics'}",
-                datasource=datasource,
-                dialect="",
-                policy_context=policy_context,
-            )
+            # Row-level scope gate (M4.5): metric queries run before_sql_read
+            # here (data path); dimension-only queries carry no metric filter
+            # (row-scope for them is follow-up B9).
+            if metrics:
+                sql_decision = PolicyRuntime(self.agent_config).before_sql_read(
+                    f"SELECT 1 FROM {path[0] if path else 'metrics'}",
+                    datasource=datasource,
+                    dialect="",
+                    policy_context=policy_context,
+                )
+            else:
+                sql_decision = None
             if isinstance(sql_decision, dict):
                 from types import SimpleNamespace
 
                 sql_decision = SimpleNamespace(**sql_decision)
-            if not sql_decision.allowed:
+            if sql_decision is not None and not sql_decision.allowed:
                 return FuncToolResult(
                     success=0,
                     error=f"Metric query denied by row policy: {sql_decision.reason or 'no reason given'}",
                 )
-            row_filters = list(getattr(sql_decision, "row_filters", None) or [])
+            row_filters = list(getattr(sql_decision, "row_filters", None) or []) if sql_decision is not None else []
 
             # Execute query via adapter
             adapter_query_kwargs = {

@@ -198,7 +198,11 @@ class CubeAdapter(BaseSemanticAdapter):
         order_by: Optional[List[str]] = None,
         dry_run: bool = False,
     ) -> QueryResult:
-        query: dict = {"measures": list(metrics)}
+        # Dimension-only (point-lookup / rank-by-dimension) queries are
+        # first-class: an empty measures list simply omits the key.
+        query: dict = {}
+        if metrics:
+            query["measures"] = list(metrics)
         if dimensions:
             query["dimensions"] = list(dimensions)
 

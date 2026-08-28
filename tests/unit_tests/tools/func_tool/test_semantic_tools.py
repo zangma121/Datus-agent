@@ -2145,3 +2145,26 @@ class TestQueryMetricsPolicyGate:
         result = semantic_tools.query_metrics(metrics=["m1"])
         assert result.success == 0
         mock_adapter.query_metrics.assert_not_called()
+
+
+class TestDimensionOnlyQuery:
+    """纯维度点查/维度排序是合法查询形态（无度量）。"""
+
+    def test_dimension_only_passes_gate_and_reaches_adapter(self, semantic_tools, mock_adapter, monkeypatch):
+        from datus.tools.func_tool.semantic_tools import SemanticTools, _run_async
+        from types import SimpleNamespace
+
+        # 门禁：空 metrics 时不得按"没有可用指标"拒绝
+        fake = SimpleNamespace(
+            before_metric_read=lambda metrics, *, datasource, policy_context: {
+                "allowed": True, "allowed_metrics": [], "denied": []}
+        )
+        monkeypatch.setattr(
+            "datus.tools.policy_runtime.PolicyRuntime", lambda config: fake)
+        query_result = QueryResult(columns=["School"], data=[{"School": "X"}], metadata={})
+        with patch("datus.tools.func_tool.semantic_tools._run_async", return_value=query_result):
+            result = semantic_tools.query_metrics(metrics=[], dimensions=["Frpm.schoolName"])
+
+        assert result.success == 1
+        kwargs = mock_adapter.query_metrics.call_args.kwargs
+        assert kwargs["metrics"] == [] and kwargs["dimensions"] == ["Frpm.schoolName"]
