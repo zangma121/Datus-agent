@@ -32,7 +32,9 @@ Rules:
 - Member names MUST be copied verbatim from the list above. Never invent members.
 - Where is ONE filter, exactly one of: "Cube.member = 'value'" | "Cube.member != 'value'" | "Cube.member IN ('a','b')" | "Cube.measure > 500" (also >=, <, <=).
 - Rate questions use the *Rate/avg measures; totals use sums; school names/counties/districts are dimensions.
-- Addresses/phones/zips are dimensions on Schools (no metric needed: still give one metric like Schools.schoolCount only if needed — dimensions-only queries are NOT allowed, always include at least one metric; if truly impossible, output {{"unanswerable": true}}).
+- Dimension-only queries ARE allowed (omit "metrics" or pass []) — use them for "list the X of schools" questions.
+- Coded columns hold NUMERIC codes, never names: Charter=1/0, Virtual=F/P/N, DOC/SOC are numeric ownership/operation codes. District/county/school NAMES live in dedicated name dimensions (Frpm.districtName, Schools.district, ...). Never put a name into a code column filter.
+- "Fresno County Office of Education" style values are DISTRICT names → use the districtName dimension of the matching cube.
 - "Highest/lowest X" → order_by ["-Measure"] or ["Measure"] with limit 1 (or N for top N).
 """
 
