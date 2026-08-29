@@ -78,7 +78,10 @@ def load_meta(adapter) -> str:
                 continue
             shown.add(d.name)
             dtxt = " (time)" if d.is_primary_time else ""
-            lines.append(f"  dimension {d.name}{dtxt} [{cube_name}]")
+            # B2: dimension descriptions anchor filter-value selection the
+            # same way measure descriptions anchor metric selection.
+            ddesc = f" — {d.description}" if (getattr(d, "description", "") or "").strip() else ""
+            lines.append(f"  dimension {d.name}{dtxt}{ddesc} [{cube_name}]")
     return "\n".join(lines)
 
 

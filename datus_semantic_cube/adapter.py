@@ -149,7 +149,18 @@ class CubeAdapter(BaseSemanticAdapter):
         for cube in cubes:
             cube_name = cube.get("name") or ""
             dimension_names = [d.get("name") or "" for d in cube.get("dimensions") or []]
+            # B2: descriptions are the semantic anchor — measure descriptions
+            # ride on the metric row; dimension descriptions ride on each
+            # metric's metadata so filter-value selection can anchor on them.
+            dimension_details = {
+                d.get("name") or "": d.get("description") or d.get("title") or ""
+                for d in cube.get("dimensions") or []
+            }
+            dimension_details = {k: v for k, v in dimension_details.items() if k and v}
             for measure in cube.get("measures") or []:
+                metadata = {"cube": cube_name, "agg_type": measure.get("aggType")}
+                if dimension_details:
+                    metadata["dimension_details"] = dimension_details
                 metrics.append(
                     MetricDefinition(
                         name=measure.get("name") or "",
@@ -157,7 +168,7 @@ class CubeAdapter(BaseSemanticAdapter):
                         type=measure.get("type") or "",
                         dimensions=dimension_names,
                         path=[cube_name],
-                        metadata={"cube": cube_name, "agg_type": measure.get("aggType")},
+                        metadata=metadata,
                     )
                 )
         return metrics[offset : offset + limit]
@@ -357,7 +368,11 @@ class CubeAdapter(BaseSemanticAdapter):
             description=cube.get("title") or cube.get("description") or "",
             table_name=table_name,
             dimensions=[
-                DimensionInfo(name=d.get("name") or "", type=d.get("type") or "string")
+                DimensionInfo(
+                    name=d.get("name") or "",
+                    type=d.get("type") or "string",
+                    description=d.get("description") or d.get("title") or "",
+                )
                 for d in cube.get("dimensions") or []
             ],
             measures=[

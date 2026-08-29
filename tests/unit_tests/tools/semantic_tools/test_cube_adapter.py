@@ -171,6 +171,20 @@ class TestListMetrics:
         assert "Sum of order amounts" in (amount.description or "")
         assert "Orders.status" in (amount.dimensions or [])
 
+    async def test_dimension_details_ride_on_metadata(self):
+        """B2: each metric row carries its cube's dimension descriptions so
+        filter-value selection can anchor on them like measure descriptions."""
+        adapter = _adapter_with_meta()
+        metrics = await adapter.list_metrics()
+        amount = next(m for m in metrics if m.name == "Orders.totalAmount")
+        assert amount.metadata["dimension_details"] == {
+            "Orders.status": "Status",
+            "Orders.createdAt": "Created At",
+        }
+        # dims without any description are omitted, not invented
+        active = next(m for m in metrics if m.name == "Users.activeCount")
+        assert "dimension_details" not in active.metadata
+
     async def test_path_filters_by_cube(self):
         adapter = _adapter_with_meta()
         metrics = await adapter.list_metrics(path=["Users"])
