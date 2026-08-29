@@ -230,3 +230,70 @@ class TestCubeCompilerConstraints:
         # dimension keeps bare camel name; measure carries Total suffix
         assert "enrollmentK12:" in model.js_text
         assert "enrollmentK12Total:" in model.js_text
+
+
+class TestCliExitCode:
+    """B4: lint failures must reach scripted consumers as a non-zero exit,
+    not just a report field."""
+
+    def test_summary_exit_code_statuses(self):
+        from datus_semantic_cube.generate_cli import summary_exit_code
+
+        assert summary_exit_code({"a": {"status": "generated", "lint": True}}) == 0
+        assert summary_exit_code({"a": {"status": "skipped", "lint": True}}) == 0
+        assert summary_exit_code({"a": {"status": "lint_failed", "lint": False}}) == 1
+        assert summary_exit_code({"a": {"status": "generated", "lint": True},
+                                  "b": {"status": "lint_failed", "lint": False}}) == 1
+
+    def test_run_generate_from_osi_exit_code(self, tmp_path):
+        """A YAML whose transpiled JS cannot lint (backtick inside the cube
+        sql breaks the template literal) surfaces as exit code 1."""
+        import argparse
+
+        from datus_semantic_cube.generate_cli import run_generate, summary_exit_code
+
+        out = tmp_path / "osi"
+        out.mkdir()
+        (out / "broken.yml").write_text(
+            "data_source:\n"
+            "  name: broken\n"
+            "  sql_query: \"SELECT 1 FROM t -- doesn't escape ` a backtick\"\n"
+        )
+        args = argparse.Namespace(
+            datasource="irrelevant", tables="", out=str(tmp_path / "out"),
+            sample_rows=5, force=True, from_osi=str(out),
+        )
+        summary = run_generate(args)
+        assert summary["broken"]["status"] == "lint_failed"
+        assert summary_exit_code(summary) == 1
+
+    def test_run_generate_from_osi_success_exit_code(self, tmp_path):
+        import argparse
+
+        from datus_semantic_cube.generate_cli import run_generate, summary_exit_code
+
+        out = tmp_path / "osi"
+        out.mkdir()
+        (out / "ok.yml").write_text(FRPCI_OK_YAML)
+        args = argparse.Namespace(
+            datasource="irrelevant", tables="", out=str(tmp_path / "out2"),
+            sample_rows=5, force=True, from_osi=str(out),
+        )
+        summary = run_generate(args)
+        assert summary_exit_code(summary) == 0
+
+
+FRPCI_OK_YAML = """
+data_source:
+  name: ok
+  sql_query: |
+    SELECT id, amount FROM ok
+  identifiers:
+    - name: ok_row
+      type: PRIMARY
+      expr: id
+  measures:
+    - name: total_amount
+      agg: SUM
+      expr: amount
+"""

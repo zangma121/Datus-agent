@@ -569,10 +569,9 @@ def main():
         # (no LLM, no datasource); otherwise schema+sample LLM generation.
         # Both need config/LLM wiring only for the latter, but the loader
         # kwargs differ from **vars(args), so both branch before the load.
-        from datus_semantic_cube.generate_cli import run_generate
+        from datus_semantic_cube.generate_cli import run_generate, summary_exit_code
 
-        run_generate(args)
-        return 0
+        return summary_exit_code(run_generate(args))
 
     # Load agent configuration
     agent_config = load_agent_config(**vars(args))

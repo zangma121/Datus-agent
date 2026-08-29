@@ -122,6 +122,20 @@ def make_llm_fn(agent_config) -> Callable[[str, str], str]:
     return llm
 
 
+def _finish(summary: Dict[str, Any]) -> Dict[str, Any]:
+    """Shared tail for both sources: print + log the summary, return it."""
+    print(json.dumps(summary, indent=1))
+    logger.info("generate-cube-models completed: %s", summary)
+    return summary
+
+
+def summary_exit_code(summary: Dict[str, Any]) -> int:
+    """B4: scripted consumers get a non-zero exit when any model failed —
+    lint_failed (or a defensive error/failed status); generated/skipped pass."""
+    failed = {"lint_failed", "error", "failed"}
+    return int(any(v.get("status") in failed for v in summary.values()))
+
+
 def run_generate(args) -> Dict[str, Any]:
     """Entry point wired into datus/main.py dispatch."""
     # M8: --from-osi transpiles OSI YAML deterministically (no LLM, no DB).
@@ -133,9 +147,7 @@ def run_generate(args) -> Dict[str, Any]:
             m["table_name"]: {"status": m["report"]["status"], "lint": m["report"]["lint"]["ok"]}
             for m in models
         }
-        print(json.dumps(summary, indent=1))
-        logger.info("generate-cube-models (from-osi) completed: %s", summary)
-        return summary
+        return _finish(summary)
 
     from datus.configuration.agent_config_loader import load_agent_config
     from datus.tools.db_tools.db_manager import DBManager
@@ -162,6 +174,4 @@ def run_generate(args) -> Dict[str, Any]:
     models = generator.generate_models(out_dir=args.out)
 
     summary = {m.table_name: {"status": m.report["status"], "lint": m.report["lint"]["ok"]} for m in models}
-    print(json.dumps(summary, indent=1))
-    logger.info("generate-cube-models completed: %s", summary)
-    return summary
+    return _finish(summary)
