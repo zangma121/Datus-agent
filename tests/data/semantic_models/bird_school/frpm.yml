@@ -7,9 +7,11 @@ data_source:
   # raw or self-quoted spaced name produces invalid SQL. Aliasing the spaced
   # columns to clean snake_case names in the source query lets the measures
   # reference plain identifiers that MetricFlow can quote and aggregate.
+  # CDSCode is double-quoted because case-sensitive physical columns fold to
+  # lowercase in strictly-typed backends (Postgres) when left bare.
   sql_query: |
     SELECT
-      CDSCode,
+      "CDSCode",
       "Enrollment (K-12)"       AS enrollment_k12,
       "Free Meal Count (K-12)"  AS free_meal_count_k12,
       "FRPM Count (K-12)"       AS frpm_count_k12

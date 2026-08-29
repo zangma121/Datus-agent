@@ -22,6 +22,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Set
 
 from datus.utils.loggings import get_logger
+from datus_semantic_cube.naming import JS_IDENT_RE as _JS_IDENT
+from datus_semantic_cube.naming import camel as _camel
+from datus_semantic_cube.naming import normalize_join_name as _normalize_join_name
 
 logger = get_logger(__name__)
 
@@ -47,26 +50,6 @@ Rules: coded/enumerated columns MUST explain what values mean; include
 English and 中文 aliases likely used in business questions."""
 
 
-_JS_IDENT = re.compile(r"^[A-Za-z_$][A-Za-z0-9_$]*$")
-
-
-def _camel(name: str) -> str:
-    """Single-word or already-camel names stay as-is (CDSCode remains);
-    separator-delimited names become lowerCamelCase; results that would be
-    illegal JS identifiers (e.g. digit-leading) get a safe ``member_`` prefix."""
-    if "_" not in name and " " not in name and name and name[0].isalpha():
-        return name
-    parts = [p for p in re.split(r"[^A-Za-z0-9]+", name) if p]
-    out = ("").join(p[:1].upper() + p[1:] for p in parts)
-    out = out[0].lower() + out[1:] if out else "col"
-    if not _JS_IDENT.match(out):
-        out = "member_" + "".join(ch for ch in out if ch.isalnum())
-    return out
-
-
-def _normalize_join_name(col: str) -> str:
-    n = re.sub(r"[^a-z]", "", col.lower())
-    return n[:-1] if n.endswith("s") else n
 
 
 def lint_model_text(js_text: str):

@@ -401,14 +401,15 @@ cube 模型的作者（未来可能经 datart 接口落库，现阶段 datus 内
 | # | 方向 | 锚点 | 触发条件 |
 |---|---|---|---|
 | B1 | **模型 alias 单独成列**：目前 LLM 生成的别名折叠在 description 字符串里（"Aliases: ..."）；应在 cube 模型/KB 层支持独立别名列表字段，提升向量检索的精确命中 | `datus_semantic_cube/generate.py` 描述渲染处；metric store 增 aliases 列 | 中文问数命中率成为瓶颈时 |
-| B2 | **维度描述进 prompt 清单**：load_meta（实验 runner）与生产 SemanticTools 的 meta 组装目前只带度量描述；维度描述已在 /meta 可得，补齐即提升维度类过滤条件的选型准确率 | 本分支 M5 lang-A/B 实验已证明语言影响成员选择 | 维度类问题误选增多时 |
+| ~~B2~~ | ✅ 已实现（2026-08-29）：CubeAdapter list_metrics 的 metadata 携带 `dimension_details`（维度名→描述），list_semantic_models 的 DimensionInfo 透传描述，eval runner load_meta 维度行带描述 | datus_semantic_cube/adapter.py + semantic_tools + cube_bird_eval.py | 已合入 |
 | B3 | **join verified_by 枚举细化**：LLM 无 verdict 时降级开放（heuristic-unverified），可选配置为降级严格（拒绝）以匹配安全场景 | `generate.py` join 确认循环 | 权限敏感租户启用自动建模时 |
-| B4 | **CLI lint 失败改退出码**：当前仅报告 lint_failed，脚本化消费者拿不到非零退出信号 | generate_cli.run_generate 返回值 + main dispatch | CI 中使用生成命令时 |
+| ~~B4~~ | ✅ 已实现（2026-08-29）：`summary_exit_code()` + main dispatch 透传非零退出；lint_failed/error 使 `generate-cube-models` 以 1 退出，CI 可消费 | generate_cli.py + datus/main.py | 已合入 |
 | B5 | **datart 写入接口对接**：用户拍板的未来通道——datus 生成的模型经 datart API 落库而非写本地文件，替换 D11 的"直接写文件"形态 | 依赖 datart 侧接口定义 | GienBI 生产接入时 |
 | B6 | **多租户 cubeOrgId live 验证**：cubeOrgId={org}A JWT 路径需 GienBI bank 栈才能端到端验证 | datus_semantic_cube/token.py 已实现单测覆盖 | bank 栈可用时 |
-| B7 | **权限矩阵 E2E + query_metrics 结果屏蔽接线**：M4 遗留，需真实 GienBI MySQL；主体模型 USER/ROLE/DEPT 并集已实现待真实数据回归 | tests/e2e/test_permission_matrix.py 占位 | 接真实权限库时 |
+| B7 | **权限矩阵 E2E + query_metrics 结果屏蔽接线**：M4 遗留，需真实 GienBI MySQL；主体模型 USER/ROLE/DEPT 并集已实现待真实数据回归（注意：原计划的 `tests/e2e/test_permission_matrix.py` 占位实际不存在，E2E 目录从未建立） | tests/unit_tests/tools/permission/（现仅 unit 层） | 接真实权限库时 |
 | B8 | **上游 PR 系列**：5 个可贡献点——CLI help 吞错、bird 测试 hermetic 化、SQL 回收兜底、lance merge_insert 失败降级、duckdb:/// 路径翻倍修复 | 各自提交已在本分支 | 与上游协调时批量提 |
-| ~~B9~~ | ✅ 已实现（75d5b6d8）：纯维度点查/维度排序一等公民——空 metrics 省略 measures 键、维度策略门禁跳过；原"维度侧行权限"拆为新待办 | semantic_tools/adapter | 已合入 |
+| ~~B9~~ | ✅ 已实现（75d5b6d8）：纯维度点查/维度排序一等公民——空 metrics 省略 measures 键、维度策略门禁跳过；原"维度侧行权限"拆为 B10 | semantic_tools/adapter | 已合入 |
+| B10 | **维度侧行权限**：B9 使纯维度查询绕过行权限门禁（点查放行是有意的），但维度成员自身的行级策略（如"华东区用户只能看华东维度值"）尚无设计 | semantic_tools 纯维度放行分支 | 维度级数据隔离成为需求时 |
 
 ---
 
@@ -435,9 +436,27 @@ OSI YAML（dosi/metricflow 已原生消费）——Cube 引擎通过**转换器*
 | T8.2 | CLI --from-osi 接线 + 报告复用 |
 | T8.3 | 真实验证：transpile bird_school frpm.yml → live 容器 /meta + 查询对照手写版 |
 
-### 验收
+### 验收 ✅ 全部通过（2026-08-29 收口）
 
-1. 单测覆盖：度量映射/双发/identifier join/TIME 降级/描述含别名透传/lint 通过。
-2. 真实 YAML（tests/data/semantic_models/bird_school/frpm.yml）转换产物部署后
-   /meta 可见、查询数值与 sqlite 一致。
-3. review 双轴通过。
+1. 单测 13 个（test_transpile_osi.py）：度量映射/双发聚合腿/除零保护/identifier
+   join/TIME 降级/描述与别名透传/ignored 报告/成员碰撞/lint 通过。
+2. T8.3 live：真实 YAML 转换产物部署 cube-live 容器，/meta 可见，四个度量
+   （enrollment 6,199,569 / free_meal 3,098,195 / frpm 3,631,406 / schools 9,986）
+   与 Postgres 源逐位一致；验证后已还原 M7 模型。
+3. 双轴 code review 完成，全部发现已修复（见下）。
+
+### M8 review 修复记录（2026-08-29）
+
+- **双发聚合腿语义修复（Spec C1）**：原实现把 `a / b` 原文 + `type: sum` 发出
+  （=SUM(a/b)，和之比率错）。现按 T-D1 包叶子：`SUM(CAST("a" AS DOUBLE PRECISION))
+  / NULLIF(SUM(...), 0)` + `type: number` 计算度量，NULLIF 除零保护（Postgres
+  x/0 会崩查询）；PerRow 维度保留原文（叶子加引号）。
+- **标识符引用修复（live 发现）**：裸 `CDSCode` 在 Postgres 折叠小写后失配——
+  转换器对裸列引用统一加内嵌双引号（度量/维度/聚合腿/PerRow）；严格类型后端
+  上 SUM/AVG 纯度量补 CAST（M7 live 模型同形态）。`frpm.yml` 的 sql_query 同步
+  修复（`SELECT "CDSCode"`）——可移植 SQL 是建模时责任。
+- **T-D3 报告缺口**：mutability/文档级未消费段进报告 `ignored` 字段。
+- ** Standards 修复**：`naming.py` 统一 camel/normalize_join_name（原先两份且
+  行为分叉）；lint 单次化；`run_generate` 尾部去重；死代码清除（_OPS_HINT/
+  死分支/重复导入）；成员名碰撞确定性改名（不再靠 lint 兜底）。
+- 顺手项：`sql/rank_schools_writing_score.sql` 实验残留删除。
