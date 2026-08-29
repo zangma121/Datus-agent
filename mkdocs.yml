@@ -96,6 +96,7 @@ nav:
         - MetricFlow Semantic Adapter: adapters/metricflow_semantic_adapter.md
         - OSI Semantic Adapter: adapters/osi_semantic_adapter.md
         - Dosi Semantic Adapter: adapters/dosi_semantic_adapter.md
+        - Cube Semantic Adapter: adapters/cube_semantic_adapter.md
       - BI Adapters: adapters/bi_adapters.md
       - Scheduler Adapters: adapters/scheduler_adapters.md
     - Benchmark:

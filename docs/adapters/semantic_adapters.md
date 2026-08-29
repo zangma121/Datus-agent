@@ -10,6 +10,7 @@ This page is the adapter overview. For adapter-specific behavior, use:
 - [MetricFlow Semantic Adapter](metricflow_semantic_adapter.md)
 - [OSI Semantic Adapter](osi_semantic_adapter.md)
 - [Dosi Semantic Adapter](dosi_semantic_adapter.md)
+- [Cube Semantic Adapter](cube_semantic_adapter.md)
 
 ## Overview
 

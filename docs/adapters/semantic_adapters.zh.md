@@ -7,6 +7,7 @@ Datus Agent 通过语义层适配器，把语义创作、校验、发现和查�
 - [MetricFlow 语义适配器](metricflow_semantic_adapter.zh.md)
 - [OSI 语义适配器](osi_semantic_adapter.zh.md)
 - [Dosi 语义适配器](dosi_semantic_adapter.zh.md)
+- [Cube 语义适配器](cube_semantic_adapter.zh.md)
 
 ## 概述
 
