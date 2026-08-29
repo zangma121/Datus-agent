@@ -55,6 +55,21 @@ target:
 
 它仅影响助手的自然语言回复，不影响 SQL 或代码。该设置在会话期间持久化。
 
+### `/engine`
+
+切换当前生效的语义引擎（`agent.services.semantic_layer` 下的适配器）：`dosi`、`metricflow`、`osi` 或 `cube`。
+
+```text
+/engine                      # 列出已配置的引擎并标记当前生效项
+/engine cube                 # 设置项目默认（写入 ./.datus/config.yml）
+/engine --global metricflow  # 设置全局默认（写入 agent.yml）
+```
+
+引擎必须已在 `agent.services.semantic_layer` 下配置（见
+[语义层配置](../configuration/semantic_layer.zh.md)）；`/engine` 只在已配置
+的引擎间选择，不负责新增。各适配器的具体行为——包括用 `generate-cube-models`
+生成 Cube 模型——见[语义适配器文档](../adapters/semantic_adapters.zh.md)。
+
 ## 设置与服务命令
 
 Datus 在 REPL 内通过斜杠命令完成配置。

@@ -21,6 +21,11 @@ agent:
 
       osi:                              # 仅查询兼容
         # execution_backend 默认是 metricflow，通常不需要配置。
+
+      cube:                             # Cube.js 查询兼容
+        datasource: bird_sqlite         # 本语义层服务的 Datus 数据源
+        api_url: http://localhost:4000/cubejs-api/v1
+        api_secret_env: CUBEJS_API_SECRET
 ```
 
 ## 选择规则
@@ -60,6 +65,13 @@ agent:
 - 每个 adapter 实例加载一个 OSI 文档。如果数据源语义模型目录包含多个文件，需要显式配置 `semantic_model_path`。
 - `pip install datus-semantic-dosi` 会同时安装 adapter 和 `dosi-engine`。
 - 交互式启动且没有语义层配置时，Datus 会自动安装并选择 Dosi；无人值守环境需要显式安装选中的 adapter。
+
+## Cube 说明
+
+- Cube 适配器把语义查询路由到 [Cube.js](https://cube.dev) 部署；OSI YAML 始终是唯一模型源，Cube 的 `.js` 模型用 `generate-cube-models` 生成（双源：schema+采样走 LLM，或 `--from-osi` 确定性转换——见 [Cube 语义适配器](../adapters/cube_semantic_adapter.zh.md)）。
+- `datasource` 指向 `services.datasources` 中本层服务的数据源；`api_secret_env` 指向存放 Cube API secret 的环境变量名（绝不要把 secret 明文写进 `agent.yml`）。
+- 纯维度点查是一等公民：`query_metrics` 允许 `metrics` 为空、只传维度。
+- 运行期用 `/engine cube`（项目默认）或 `/engine --global cube` 切换。
 
 ## 通过 CLI 配置（`/services`）
 

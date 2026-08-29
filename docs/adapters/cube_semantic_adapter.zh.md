@@ -100,12 +100,18 @@ datus-agent generate-cube-models \
 | OSI | Cube | 说明 |
 |---|---|---|
 | `measures[].agg` | `measure.type` | `SUM→sum`、`AVG/average→average`、`COUNT→count`、`COUNT_DISTINCT→count_distinct`、`MIN→min`、`MAX→max` |
-| `measures[].expr` | `measure.sql` | 原样透传；**绝不**自己包一层 `SUM(...)`——`type: sum` 已负责聚合，嵌套会变成双重聚合 |
-| 带操作符的 `expr`（如 `a / b` 比率） | **双发** | 聚合 `measure`（算总量）+ 行级 `<Name>PerRow` 维度（供按行排序/过滤） |
+| `measures[].expr`（纯列） | `measure.sql` | SUM/AVG 度量发出为 `CAST("col" AS DOUBLE PRECISION)`（严格类型后端拒绝 SUM(text)）；裸列引用带内嵌双引号，大小写不丢失 |
+| 带操作符的 `expr`（如 `a / b` 比率） | **双发** | 聚合腿：`type: number` 计算度量，叶子按 OSI agg 包裹（`SUM(CAST("a" ...)) / NULLIF(SUM(CAST("b" ...)), 0)`）——比率之和 + 除零保护；外加行级 `<Name>PerRow` 维度携带原文（供按行排序/过滤） |
 | 跨模型同名 `PRIMARY` identifier | `belongsTo` join | 字母序靠后的模型指向靠前的模型 |
 | `type: TIME` 的维度 | 普通维度 | 时间粒度由 Cube 自有的时间维度机制负责 |
 | `description` | `description` | 原样透传；为空时省略该字段（Cube 拒绝空字符串） |
-| `sql_query` 源 | `sql` | 别名化的 SELECT 直接作为 cube 的 `sql` |
+| `sql_query` 源 | `sql` | 别名化的 SELECT 直接作为 cube 的 `sql`——大小写敏感的物理列要加引号（`"CDSCode"` 而非 `CDSCode`），否则在 Postgres 折叠成小写 |
+| 未消费的段（`mutability`、文档级键） | 报告 `ignored` | 列入 `_generation_report.json`，绝不静默丢弃 |
+
+expr 中已含聚合调用（`SUM(...)`）的度量按 `type: number` 原样发出——绝不放在
+Cube 会再次聚合的类型下。成员名碰撞按确定性规则改名。
+
+lint 失败使命令以非零退出码结束，CI 可以据此设门禁。
 
 ## 查询行为
 

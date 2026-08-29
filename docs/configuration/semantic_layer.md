@@ -28,6 +28,11 @@ agent:
       osi:                              # query-only compatibility
         # execution_backend defaults to metricflow and normally does not need
         # to be configured.
+
+      cube:                             # Cube.js query compatibility
+        datasource: bird_sqlite         # Datus datasource this layer serves
+        api_url: http://localhost:4000/cubejs-api/v1
+        api_secret_env: CUBEJS_API_SECRET
 ```
 
 ## Selection Rules
@@ -78,6 +83,21 @@ Comparison is case-insensitive and trims surrounding whitespace.
 - On interactive launch with no semantic-layer configuration, Datus installs
   and selects Dosi automatically. Non-interactive environments must install
   their selected adapter explicitly.
+
+## Cube Notes
+
+- The Cube adapter routes semantic queries to a [Cube.js](https://cube.dev)
+  deployment; OSI YAML stays the single model source, and Cube `.js` models
+  are generated with `generate-cube-models` (dual source: LLM from schema +
+  samples, or deterministic `--from-osi` transpile — see
+  [Cube Semantic Adapter](../adapters/cube_semantic_adapter.md)).
+- `datasource` names the `services.datasources` entry the layer serves;
+  `api_secret_env` names the environment variable carrying the Cube API
+  secret (never inline the secret in `agent.yml`).
+- Dimension-only point lookups are first-class: an empty `metrics` list with
+  dimensions is a valid `query_metrics` call.
+- Switch at runtime with `/engine cube` (project default) or
+  `/engine --global cube`.
 
 ## Configuring through the CLI (`/services`)
 

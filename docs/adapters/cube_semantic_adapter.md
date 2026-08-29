@@ -108,12 +108,19 @@ Notes:
 | OSI | Cube | Notes |
 |---|---|---|
 | `measures[].agg` | `measure.type` | `SUM→sum`, `AVG/average→average`, `COUNT→count`, `COUNT_DISTINCT→count_distinct`, `MIN→min`, `MAX→max` |
-| `measures[].expr` | `measure.sql` | passed through verbatim; **never** wrap in `SUM(...)` yourself — `type: sum` already aggregates, nesting double-aggregates |
-| measure `expr` with operators (e.g. `a / b` ratios) | **dual-emit** | aggregate `measure` (for totals) + row-level `<Name>PerRow` dimension (for per-row sorting/filtering) |
+| `measures[].expr` (pure column) | `measure.sql` | SUM/AVG measures are emitted as `CAST("col" AS DOUBLE PRECISION)` (strictly-typed backends reject SUM over text columns); bare column refs carry embedded double quotes so case survives |
+| measure `expr` with operators (e.g. `a / b` ratios) | **dual-emit** | aggregate leg: `type: number` calculated measure with leaves wrapped in their OSI agg (`SUM(CAST("a" ...)) / NULLIF(SUM(CAST("b" ...)), 0)`) — ratio-of-sums with divide-by-zero protection; plus a row-level `<Name>PerRow` dimension carrying the verbatim expr (for per-row sorting/filtering) |
 | same-name `PRIMARY` identifiers across models | `belongsTo` joins | the alphabetically-later model points at the earlier one |
 | `dimensions` with `type: TIME` | plain dimension | Cube owns time granularity via its own time-dimension handling |
 | `description` | `description` | passed through verbatim; omitted when empty (Cube rejects empty strings) |
-| `sql_query` source | `sql` | the aliased SELECT is used as the cube's `sql` |
+| `sql_query` source | `sql` | the aliased SELECT is used as the cube's `sql` — quote case-sensitive physical columns (`"CDSCode"`, not `CDSCode`), they fold to lowercase in Postgres |
+| unconsumed sections (`mutability`, doc-level keys) | report `ignored` | listed in `_generation_report.json`, never silently dropped |
+
+An expr that already contains an aggregate call (`SUM(...)`) is emitted
+verbatim as `type: number` — never under a type Cube would aggregate again.
+Member-name collisions resolve to deterministic unique names.
+
+A lint failure makes the command exit non-zero, so CI can gate on it.
 
 ## Query Behavior
 

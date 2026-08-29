@@ -55,6 +55,22 @@ Set the language the assistant replies in.
 
 It affects only the assistant's natural-language responses, not SQL or code. The setting persists for the session.
 
+### `/engine`
+
+Switch the active semantic engine (the adapter under `agent.services.semantic_layer`): `dosi`, `metricflow`, `osi`, or `cube`.
+
+```text
+/engine                      # list configured engines, mark the active one
+/engine cube                 # set the project default (./.datus/config.yml)
+/engine --global metricflow  # set the global default in agent.yml
+```
+
+Engines must already be configured under `agent.services.semantic_layer`
+(see [Semantic Layer Configuration](../configuration/semantic_layer.md));
+`/engine` selects among them, it does not add new ones. Adapter-specific
+behavior — including Cube model generation with `generate-cube-models` —
+is described in the [semantic adapter docs](../adapters/semantic_adapters.md).
+
 ## Setup & Service Commands
 
 Datus is configured from inside the REPL with slash commands.
