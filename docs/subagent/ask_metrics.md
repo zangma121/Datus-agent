@@ -116,9 +116,14 @@ agent:
     ask_metrics:
       model: claude
       max_turns: 12
-      semantic_adapter: metricflow
       subject_tree_prompt_limit: 100
 ```
+
+The semantic engine is selected globally, not per node: configure it under
+`agent.services.semantic_layer` (`dosi`, `metricflow`, `osi`, or `cube`) and
+switch with `/engine` when several are configured — see [Semantic Layer
+Configuration](../configuration/semantic_layer.md). Legacy node-level
+`semantic_adapter` / `authoring_format` fields are ignored.
 
 ### Custom AskMetrics Agents
 

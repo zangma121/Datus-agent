@@ -114,9 +114,13 @@ agent:
     ask_metrics:
       model: claude
       max_turns: 12
-      semantic_adapter: metricflow
       subject_tree_prompt_limit: 100
 ```
+
+语义引擎是全局选择的，不按节点配置：在 `agent.services.semantic_layer` 下配置
+（`dosi`、`metricflow`、`osi` 或 `cube`），配置了多个引擎时用 `/engine` 切换——
+见[语义层配置](../configuration/semantic_layer.zh.md)。旧的 node 级
+`semantic_adapter` / `authoring_format` 字段会被忽略。
 
 ### 自定义 AskMetrics Agent
 
