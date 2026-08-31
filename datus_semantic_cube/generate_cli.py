@@ -170,6 +170,7 @@ def run_generate(args) -> Dict[str, Any]:
         out_dir=args.out,
         overwrite=args.force,
         sample_rows=args.sample_rows,
+        join_unverified_policy=getattr(args, "join_unverified", None) or "open",
     )
     models = generator.generate_models(out_dir=args.out)
 

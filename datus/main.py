@@ -189,6 +189,16 @@ def create_parser() -> argparse.ArgumentParser:
     generate_models_parser.add_argument("--tables", type=str, default="", help="comma-separated table list; empty = all")
     generate_models_parser.add_argument("--out", required=True, help="output directory for generated .js files")
     generate_models_parser.add_argument("--sample-rows", type=int, default=5)
+    generate_models_parser.add_argument(
+        "--join-unverified",
+        choices=["open", "strict"],
+        default="open",
+        help=(
+            "LLM-generation only: what to do with heuristic join candidates the LLM "
+            "did not confirm. open keeps them (marked heuristic-unverified, default); "
+            "strict drops them for permission-sensitive tenants. Ignored with --from-osi."
+        ),
+    )
     generate_models_parser.add_argument("--force", action="store_true", help="overwrite existing model files")
     generate_models_parser.add_argument(
         "--from-osi",

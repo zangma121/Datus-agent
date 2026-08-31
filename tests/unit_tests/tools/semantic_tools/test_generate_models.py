@@ -97,8 +97,11 @@ def _schema_provider():
     return list(tables.keys()), provider, sample_values
 
 
-def _generator(llm=None, force=False):
+def _generator(llm=None, force=False, join_unverified_policy=None):
     tables, provider, sampler = _schema_provider()
+    kwargs = {}
+    if join_unverified_policy is not None:
+        kwargs["join_unverified_policy"] = join_unverified_policy
     gen = CubeModelGenerator(
         llm_fn=llm or _llm_ok(),
         table_names=tables,
@@ -106,9 +109,24 @@ def _generator(llm=None, force=False):
         sample_provider=sampler,
         out_dir=None,  # dry-run mode exercised separately
         overwrite=force,
+        **kwargs,
     )
     gen._tables_all = tables
     return gen
+
+
+def _join_llm(verdicts=None, fail=False):
+    """LLM fake that answers description prompts normally and the join
+    verify prompt with the given verdicts (or raises when fail=True)."""
+
+    def llm(system, user):
+        if "verify" in system:
+            if fail:
+                raise RuntimeError("verify down")
+            return json.dumps([{"pair": i, "plausible": p} for i, p in (verdicts or {}).items()])
+        return _llm_ok()(system, user)
+
+    return llm
 
 
 class TestClassification:
@@ -175,6 +193,51 @@ class TestJoinInference:
             for other, info in m.report["joins"].items():
                 assert info["verified_by"].startswith("heuristic")
                 assert "CDSCode" in info["on"]
+
+
+class TestJoinUnverifiedPolicy:
+    """B3: what happens to a heuristic join candidate the LLM did not confirm
+    is a policy — open keeps it (marked heuristic-unverified), strict drops
+    it. An explicit LLM rejection drops the edge under both policies."""
+
+    def test_llm_rejected_join_is_dropped_under_open(self, tmp_path):
+        gen = _generator(llm=_join_llm(verdicts={0: False}))
+        edges = gen._infer_joins()
+        assert edges == {}
+        assert gen._last_joins_dropped["rejected"] >= 1
+
+    def test_llm_rejected_join_is_dropped_under_strict(self, tmp_path):
+        gen = _generator(llm=_join_llm(verdicts={0: False}), join_unverified_policy="strict")
+        assert gen._infer_joins() == {}
+
+    def test_open_policy_keeps_missing_verdict(self, tmp_path):
+        gen = _generator(llm=_join_llm(verdicts={}))
+        edges = gen._infer_joins()
+        assert edges, "open policy must keep heuristic edges"
+        infos = [info for cube in edges.values() for info in cube.values()]
+        assert any(i["verified_by"] == "heuristic-unverified" for i in infos)
+
+    def test_strict_policy_drops_missing_verdict(self, tmp_path):
+        gen = _generator(llm=_join_llm(verdicts={}), join_unverified_policy="strict")
+        edges = gen._infer_joins()
+        assert edges == {}
+        assert gen._last_joins_dropped["unverified"] >= 1
+
+    def test_strict_policy_on_llm_failure_drops_all(self, tmp_path):
+        gen = _generator(llm=_join_llm(fail=True), join_unverified_policy="strict")
+        assert gen._infer_joins() == {}
+
+    def test_invalid_policy_rejected(self):
+        import pytest as _pytest
+        with _pytest.raises(ValueError, match="join_unverified_policy"):
+            _generator(join_unverified_policy="yolo")
+
+    def test_report_records_dropped_counts(self, tmp_path):
+        gen = _generator(llm=_join_llm(verdicts={}), join_unverified_policy="strict")
+        models = gen.generate_models(out_dir=tmp_path)
+        assert all(m.report.get("joins_dropped", {}).get("unverified", 0) >= 0 for m in models)
+        strict_dropped = next(m for m in models if m.report["joins_dropped"]["unverified"])
+        assert strict_dropped.report["joins_dropped"]["unverified"] >= 1
 
 
 class TestLint:

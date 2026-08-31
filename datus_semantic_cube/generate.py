@@ -19,7 +19,7 @@ import dataclasses
 import json
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Set
+from typing import Any, Callable, Dict, List, Optional
 
 from datus.utils.loggings import get_logger
 from datus_semantic_cube.naming import JS_IDENT_RE as _JS_IDENT
@@ -111,7 +111,12 @@ class CubeModelGenerator:
         out_dir: Optional[str] = None,
         overwrite: bool = False,
         sample_rows: int = 5,
+        join_unverified_policy: str = "open",
     ):
+        if join_unverified_policy not in ("open", "strict"):
+            raise ValueError(
+                f"join_unverified_policy must be 'open' or 'strict', got {join_unverified_policy!r}"
+            )
         self.llm_fn = llm_fn
         self.table_names = list(table_names)
         self.column_provider = column_provider
@@ -119,6 +124,11 @@ class CubeModelGenerator:
         self.out_dir = Path(out_dir) if out_dir else None
         self.overwrite = overwrite
         self.sample_rows = sample_rows
+        # B3: what happens to heuristic join candidates the LLM did not
+        # confirm. 'open' keeps them marked heuristic-unverified; 'strict'
+        # drops them (permission-sensitive tenants).
+        self.join_unverified_policy = join_unverified_policy
+        self._last_joins_dropped: Dict[str, int] = {"rejected": 0, "unverified": 0}
 
     # ── classification ───────────────────────────────────────────────
 
@@ -259,6 +269,7 @@ class CubeModelGenerator:
         pks = {t: self._pick_primary_key(cache[t])[0] for t in self.table_names}
 
         candidates: List[Tuple[str, str, str, str]] = []
+        self._last_joins_dropped = {"rejected": 0, "unverified": 0}
         names = sorted(self.table_names)
         for i, left in enumerate(names):
             for right in names[i + 1:]:
@@ -295,11 +306,21 @@ class CubeModelGenerator:
             except Exception as exc:  # noqa: BLE001 - degrade to heuristics
                 logger.warning("Join LLM verification failed; heuristic edges kept: %s", exc)
                 verdicts = {}
+            dropped = {"rejected": 0, "unverified": 0}
             for idx, cand in enumerate(candidates):
                 l, r, lc, rc = cand
-                plausible = verdicts.get(idx, True)  # degrade-open on missing verdict
-                verified_by = "llm" if idx in verdicts else "heuristic-unverified"
-                confirmed.append((l, r, lc, rc, "llm" if idx in verdicts else verified_by))
+                if idx in verdicts:
+                    if not verdicts[idx]:
+                        # LLM explicitly rejected the pairing — dropped under
+                        # every policy.
+                        dropped["rejected"] += 1
+                        continue
+                    confirmed.append((l, r, lc, rc, "llm"))
+                elif self.join_unverified_policy == "strict":
+                    dropped["unverified"] += 1
+                else:
+                    confirmed.append((l, r, lc, rc, "heuristic-unverified"))
+            self._last_joins_dropped = dropped
 
         edges: Dict[str, Dict[str, Dict[str, Any]]] = {}
         pks = pks  # closure reference
@@ -340,6 +361,7 @@ class CubeModelGenerator:
                     "on": v["on"]}
                 for w, v in join_map.get(table, {}).items()
             }
+            model.report["joins_dropped"] = dict(self._last_joins_dropped)
             status = "generated"
             target = out_dir_path / f"{model.table_name}.js"
             if out_dir_path is not None:

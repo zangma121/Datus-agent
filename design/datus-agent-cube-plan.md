@@ -386,7 +386,8 @@ cube 模型的作者（未来可能经 datart 接口落库，现阶段 datus 内
 ### M7 遗留优化项（不阻塞验收）
 
 - join LLM 复核的 verified_by 枚举含 heuristic-unverified（无 verdict 时
-  降开放语义）；别名 currently 仅折叠进 description 字符串，未单独成列；
+  降开放语义；✅ B3 已补 strict 可配）；别名 currently 仅折叠进 description
+  字符串，未单独成列（✅ B1 已落地 meta/KB 列）；
 - 维度描述尚未进 load_meta 的 prompt 清单（度量描述已进）——维度类问题
   命中率提升时补；
 - CLI lint 失败仅报告不改退出码（脚本化消费者注意）。
@@ -402,6 +403,7 @@ cube 模型的作者（未来可能经 datart 接口落库，现阶段 datus 内
 |---|---|---|---|
 | B1 | **模型 alias 单独成列**：目前 LLM 生成的别名折叠在 description 字符串里（"Aliases: ..."）；应在 cube 模型/KB 层支持独立别名列表字段，提升向量检索的精确命中 | `datus_semantic_cube/generate.py` 描述渲染处；metric store 增 aliases 列 | 中文问数命中率成为瓶颈时 |
 | ~~B1~~ | ✅ 已实现（2026-08-31）：别名结构化流转——OSI YAML `aliases` / LLM 别名 → Cube 成员 `meta: { aliases: [...] }`（live 验证 /meta 回显）→ CubeAdapter metadata → KB `metrics.aliases` 列（换行拼接，FTS 索引 boost 2.0，存量表空默认迁移）；description 折叠保留（向量嵌入面不变） | naming 不变；generate.py render_aliases_meta + transpile.py + adapter.py + storage_sync.py + metric/store.py | 已合入 |
+| ~~B3~~ | ✅ 已实现（2026-08-31）：`join_unverified_policy` open/strict 可配（生成器参数 + CLI `--join-unverified`）；顺带修复 verdict=False（LLM 明确否决）的边在旧代码里仍被保留的 bug（两种策略下都丢弃）；丢弃计数进 report `joins_dropped` | generate.py + main.py + generate_cli.py | 已合入 |
 | ~~B2~~ | ✅ 已实现（2026-08-29）：CubeAdapter list_metrics 的 metadata 携带 `dimension_details`（维度名→描述），list_semantic_models 的 DimensionInfo 透传描述，eval runner load_meta 维度行带描述 | datus_semantic_cube/adapter.py + semantic_tools + cube_bird_eval.py | 已合入 |
 | B3 | **join verified_by 枚举细化**：LLM 无 verdict 时降级开放（heuristic-unverified），可选配置为降级严格（拒绝）以匹配安全场景 | `generate.py` join 确认循环 | 权限敏感租户启用自动建模时 |
 | ~~B4~~ | ✅ 已实现（2026-08-29）：`summary_exit_code()` + main dispatch 透传非零退出；lint_failed/error 使 `generate-cube-models` 以 1 退出，CI 可消费 | generate_cli.py + datus/main.py | 已合入 |
