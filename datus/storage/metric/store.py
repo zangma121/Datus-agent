@@ -124,6 +124,9 @@ class MetricStorage(BaseSubjectEmbeddingStore):
                     pa.field("semantic_model_name", pa.string()),  # Source semantic model
                     # -- Retrieval Fields --
                     pa.field("description", pa.string()),  # For LLM reading (RAG) and vector search
+                    # B1: search aliases (newline-joined), FTS-indexed for
+                    # exact hits that vector similarity alone can miss.
+                    pa.field("aliases", pa.string()),
                     pa.field("vector", pa.list_(pa.float32(), list_size=embedding_model.dim_size)),
                     # -- MetricFlow Specific Fields --
                     pa.field("metric_type", pa.string()),  # "simple" | "derived" | "ratio" | "cumulative"
@@ -163,15 +166,21 @@ class MetricStorage(BaseSubjectEmbeddingStore):
         self._create_scalar_index("schema_name")
 
         self.create_subject_index()
-        self.create_fts_index(FtsSpec((FtsField("name", boost=3.0), FtsField("description"))))
+        self.create_fts_index(
+            FtsSpec((FtsField("name", boost=3.0), FtsField("description"), FtsField("aliases", boost=2.0)))
+        )
 
     def _scope_column_migration_exprs(self) -> Dict[str, str]:
         # Also backfill the Hub uid column on pre-existing metric tables (empty
         # default; real uids land on the next build-kb / pull vectorization),
         # reusing the same best-effort ensure_columns migration as scope columns.
+        # B1: aliases backfills empty; the next sync from models carrying
+        # aliases repopulates them.
         exprs = super()._scope_column_migration_exprs()
         if self._schema is not None and "uid" in set(self._schema.names):
             exprs = {**exprs, "uid": "''"}
+        if self._schema is not None and "aliases" in set(self._schema.names):
+            exprs = {**exprs, "aliases": "''"}
         return exprs
 
     def batch_store_metrics(self, metrics: List[Dict[str, Any]]) -> None:

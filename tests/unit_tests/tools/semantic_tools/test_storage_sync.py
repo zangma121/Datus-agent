@@ -442,6 +442,26 @@ class TestStoreMetric:
         stored = mock_store.batch_store_metrics.call_args[0][0]
         assert stored[0]["id"] == "metric:revenue"
 
+    def test_aliases_joined_into_row(self):
+        """B1: aliases travel as a newline-joined string — structured enough
+        to round-trip and FTS-indexable for exact alias hits."""
+        manager = _make_manager()
+        mock_store = MagicMock()
+        with patch.object(manager, "_ensure_metric_store", return_value=mock_store):
+            manager.store_metric({"name": "revenue", "aliases": ["营收", "sales"]})
+
+        stored = mock_store.batch_store_metrics.call_args[0][0]
+        assert stored[0]["aliases"] == "营收\nsales"
+
+    def test_aliases_absent_stores_empty(self):
+        manager = _make_manager()
+        mock_store = MagicMock()
+        with patch.object(manager, "_ensure_metric_store", return_value=mock_store):
+            manager.store_metric({"name": "revenue"})
+
+        stored = mock_store.batch_store_metrics.call_args[0][0]
+        assert stored[0]["aliases"] == ""
+
     def test_metric_type_defaults_to_simple(self):
         manager = _make_manager()
         mock_store = MagicMock()
@@ -459,6 +479,30 @@ class TestStoreMetric:
 
         stored = mock_store.batch_store_metrics.call_args[0][0]
         assert stored[0]["metric_type"] == "ratio"
+
+
+class TestStoreMetricAliasesRealStorage:
+    def test_aliases_round_trip_through_real_storage(self, real_agent_config):
+        """B1 end-to-end at the storage layer: aliases land in their own
+        column (empty default for rows without any) and read back out."""
+        manager = SemanticStorageManager(agent_config=real_agent_config)
+        manager.store_metric(
+            {
+                "name": "free_meal_rate",
+                "description": "Free meal eligibility ratio.",
+                "aliases": ["eligible free rate", "免费餐比例"],
+            }
+        )
+        manager.store_metric({"name": "plain_metric", "description": "No aliases."})
+
+        store = manager._ensure_metric_store()
+        store._ensure_table_ready()
+        rows = {
+            r["name"]: r
+            for r in store.table.search_all(limit=100).to_pylist()
+        }
+        assert rows["free_meal_rate"]["aliases"] == "eligible free rate\n免费餐比例"
+        assert rows["plain_metric"]["aliases"] == ""
 
 
 class TestSyncFromAdapter:
@@ -506,6 +550,29 @@ class TestSyncFromAdapter:
 
         assert stats["metrics_synced"] == 2
         assert mock_store_metric.call_count == 2
+
+    def test_sync_metrics_carries_metadata_aliases(self):
+        """B1: aliases published by an adapter through MetricDefinition
+        metadata flow into the stored metric row."""
+        manager = _make_manager()
+        mock_adapter = MagicMock()
+        mock_adapter.service_type = "test_service"
+        mock_adapter.list_semantic_models.return_value = []
+        metric = _make_metric("free_meal_rate")
+        metric.metadata["aliases"] = ["eligible free rate", "免费餐比例"]
+        mock_adapter.list_metrics = AsyncMock(return_value=[metric])
+
+        with patch.object(manager, "store_metric") as mock_store_metric:
+            asyncio.run(
+                manager.sync_from_adapter(
+                    adapter=mock_adapter,
+                    sync_semantic_models=False,
+                    sync_metrics=True,
+                )
+            )
+
+        payload = mock_store_metric.call_args[0][0]
+        assert payload["aliases"] == ["eligible free rate", "免费餐比例"]
 
     def test_sync_with_both_disabled(self):
         manager = _make_manager()

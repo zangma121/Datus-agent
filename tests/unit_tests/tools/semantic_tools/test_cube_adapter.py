@@ -185,6 +185,19 @@ class TestListMetrics:
         active = next(m for m in metrics if m.name == "Users.activeCount")
         assert "dimension_details" not in active.metadata
 
+    async def test_member_meta_aliases_reach_metadata(self):
+        """B1: aliases authored as structured member meta come back through
+        /meta and ride on the metric's metadata."""
+        payload = _meta_payload()
+        payload["cubes"][0]["measures"][1]["meta"] = {"aliases": ["total amount", "订单金额"]}
+        adapter = _adapter_with_meta(payload)
+        metrics = await adapter.list_metrics()
+        amount = next(m for m in metrics if m.name == "Orders.totalAmount")
+        assert amount.metadata["aliases"] == ["total amount", "订单金额"]
+        # members without meta stay clean
+        count = next(m for m in metrics if m.name == "Orders.count")
+        assert "aliases" not in count.metadata
+
     async def test_path_filters_by_cube(self):
         adapter = _adapter_with_meta()
         metrics = await adapter.list_metrics(path=["Users"])

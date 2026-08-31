@@ -159,6 +159,9 @@ class CubeAdapter(BaseSemanticAdapter):
             dimension_details = {k: v for k, v in dimension_details.items() if k and v}
             for measure in cube.get("measures") or []:
                 metadata = {"cube": cube_name, "agg_type": measure.get("aggType")}
+                aliases = (measure.get("meta") or {}).get("aliases") or []
+                if aliases:
+                    metadata["aliases"] = [str(a) for a in aliases]
                 if dimension_details:
                     metadata["dimension_details"] = dimension_details
                 metrics.append(

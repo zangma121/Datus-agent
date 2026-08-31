@@ -10,6 +10,7 @@ real database or network.
 """
 
 import json
+import re
 
 import pytest
 
@@ -136,6 +137,14 @@ class TestDescriptions:
         model = gen.build_model("frpm")
         assert "Generated bilingual description" in model.js_text
         assert llm.calls, "LLM must be consulted for descriptions"
+
+    def test_llm_aliases_emitted_as_structured_meta(self, tmp_path):
+        """B1: LLM-authored aliases ride as member meta (structured) in
+        addition to the description, so /meta can carry them back out."""
+        llm = _llm_ok()
+        gen = _generator(llm=llm)
+        model = gen.build_model("frpm")
+        assert re.search(r"meta: \{ aliases: \[[^\]]*eligible free rate[^\]]*\]", model.js_text), model.js_text
 
     def test_malformed_llm_json_leaves_blank_description_and_reports(self, tmp_path):
         llm = _llm_ok(responses=["not-json{{", "still-bad{{"])

@@ -33,6 +33,17 @@ from datus.utils.loggings import get_logger
 logger = get_logger(__name__)
 
 
+def _join_aliases(aliases: Any) -> str:
+    """B1: aliases land as a newline-joined string — structured enough to
+    round-trip and FTS-indexable for exact alias hits. Accepts a list of
+    strings or a pre-joined string; anything else stores as empty."""
+    if isinstance(aliases, str):
+        return aliases
+    if isinstance(aliases, (list, tuple)):
+        return "\n".join(str(a) for a in aliases if str(a).strip())
+    return ""
+
+
 class SemanticStorageManager:
     """Manages sync between semantic adapters and unified storage."""
 
@@ -274,6 +285,7 @@ class SemanticStorageManager:
             "id": build_metric_id(subject_path, metric_data["name"]),
             "name": metric_data["name"],
             "description": metric_data.get("description", ""),
+            "aliases": _join_aliases(metric_data.get("aliases")),
             "semantic_model_name": metric_data.get("semantic_model_name", ""),
             "metric_type": metric_data.get("metric_type", "simple"),
             "measure_expr": "",  # Will be populated by specific adapters
@@ -366,6 +378,7 @@ class SemanticStorageManager:
                         {
                             "name": metric.name,
                             "description": metric.description,
+                            "aliases": (metric.metadata or {}).get("aliases") or [],
                             "metric_type": metric.type or "simple",
                             "dimensions": metric.dimensions,
                             "measures": metric.measures,

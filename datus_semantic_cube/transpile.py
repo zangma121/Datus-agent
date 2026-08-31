@@ -38,7 +38,7 @@ from typing import Any, Dict, List, Optional, Set
 import yaml
 
 from datus.utils.loggings import get_logger
-from datus_semantic_cube.generate import lint_model_text
+from datus_semantic_cube.generate import lint_model_text, render_aliases_meta
 from datus_semantic_cube.naming import camel as _camel
 from datus_semantic_cube.naming import normalize_join_name as _normalize_join_name
 
@@ -212,13 +212,15 @@ def transpile_model(osi: Dict[str, Any], joins_code: str = "") -> str:
             desc = (desc + "\n" if desc else "") + "Aliases: " + ", ".join(str(a) for a in aliases)
         desc_js = json.dumps(desc, ensure_ascii=True) if desc else None
         desc_part = f", description: {desc_js}" if desc_js is not None else ""
+        meta_part = render_aliases_meta(aliases)
+        meta_part = f", {meta_part}" if meta_part else ""
 
         if _has_operator(expr):
             # Dual emission (T-D1): aggregate leg wraps leaves in their OSI
             # agg (ratio-of-sums, NULLIF-guarded); the verbatim expr (leaves
             # quoted) becomes a row-level PerRow dimension for per-row ranking.
             measures.append(
-                f"    {member}: {{ sql: `{_wrap_leaf_columns(expr, leaves, agg)}`, type: `number`{desc_part} }},"
+                f"    {member}: {{ sql: `{_wrap_leaf_columns(expr, leaves, agg)}`, type: `number`{desc_part}{meta_part} }},"
             )
             dim_member = _unique_member(member + "PerRow", taken)
             d_desc = f"{desc} ROW-LEVEL (per row)." if desc else "ROW-LEVEL expression."
@@ -231,7 +233,7 @@ def transpile_model(osi: Dict[str, Any], joins_code: str = "") -> str:
             # Author already aggregated in the expr: emit as a calculated
             # measure, never under a type that Cube would aggregate again.
             logger.warning("Measure %s.%s expr is pre-aggregated; emitted verbatim as type: number", cube_name, member)
-            measures.append(f"    {member}: {{ sql: `{expr}`, type: `number`{desc_part} }},")
+            measures.append(f"    {member}: {{ sql: `{expr}`, type: `number`{desc_part}{meta_part} }},")
         else:
             ctype = _AGG_MAP.get(agg, "number")
             # Strictly-typed backends (Postgres) reject SUM over text columns
@@ -239,7 +241,7 @@ def transpile_model(osi: Dict[str, Any], joins_code: str = "") -> str:
             # bare column refs and cast numeric aggs (M7 live-model shape).
             col_ref = f'"{expr}"' if _BARE_IDENT.match(expr) else expr
             sql_out = f"CAST({col_ref} AS DOUBLE PRECISION)" if ctype in ("sum", "average") else col_ref
-            measures.append(f"    {member}: {{ sql: `{sql_out}`, type: `{ctype}`{desc_part} }},")
+            measures.append(f"    {member}: {{ sql: `{sql_out}`, type: `{ctype}`{desc_part}{meta_part} }},")
 
     for d in osi.get("dimensions") or []:
         d_name = str(d.get("name") or "")

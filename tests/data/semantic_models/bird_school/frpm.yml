@@ -28,6 +28,7 @@ data_source:
       agg: SUM
       expr: enrollment_k12
       description: "Total K-12 student enrollment count."
+      aliases: ["total enrollment", "K-12 enrollment", "入学总数"]
       create_metric: true
     - name: free_meal_count_k12
       agg: SUM

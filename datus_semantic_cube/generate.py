@@ -52,6 +52,17 @@ English and 中文 aliases likely used in business questions."""
 
 
 
+def render_aliases_meta(aliases) -> str:
+    """Render aliases as structured Cube member meta (B1): ``meta: { aliases:
+    [`a`, `b`] }`` — /meta echoes member meta, letting the knowledge base
+    sync aliases without parsing them out of the description text. Empty
+    input renders as empty string (no meta member)."""
+    if not aliases:
+        return ""
+    items = ", ".join("`" + str(a).replace("`", "'") + "`" for a in aliases if str(a).strip())
+    return f"meta: {{ aliases: [{items}] }}" if items else ""
+
+
 def lint_model_text(js_text: str):
     """Structural lint: balanced braces/backticks + required markers."""
     issues: List[str] = []
@@ -174,6 +185,9 @@ class CubeModelGenerator:
                 entry_parts.append("primaryKey: true")
             if desc_js is not None:
                 entry_parts.append(f"description: {desc_js}")
+            dim_meta = render_aliases_meta(descriptions.get(name, {}).get("aliases"))
+            if dim_meta:
+                entry_parts.append(dim_meta)
             dims.append(f"    {_camel(name)}: {{ {', '.join(entry_parts) } }},")
 
             if _is_numeric(c["type"]) and name != pk:
@@ -184,8 +198,10 @@ class CubeModelGenerator:
                 m_name = _camel(name) + "Total"  # avoid clashing with the dimension member
                 m_desc = json.dumps(descriptions.get(name, {}).get("description", ""), ensure_ascii=True) if desc else None
                 desc_part = f", description: {m_desc}" if m_desc is not None else ""
+                m_meta = render_aliases_meta(descriptions.get(name, {}).get("aliases"))
+                meta_part = f", {m_meta}" if m_meta else ""
                 measures.append(
-                    f"    {m_name}: {{ sql: `{m_sql}`, type: `sum`{desc_part} }},"
+                    f"    {m_name}: {{ sql: `{m_sql}`, type: `sum`{desc_part}{meta_part} }},"
                 )
 
         join_block = f"\n  joins: {{\n{joins_code}\n  }}," if joins_code.strip() else ""

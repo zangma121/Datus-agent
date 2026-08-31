@@ -232,6 +232,18 @@ class TestAliasesAndAggCoverage:
         js = transpile_model(ds)
         assert "Aliases: eligible free rate, free meal rate" in js
 
+    def test_alias_emitted_as_structured_meta(self, frpm_yaml):
+        """B1: aliases ride as structured member meta so /meta can carry them
+        back out for the knowledge base, instead of living only inside the
+        description string."""
+        ds = frpm_yaml["data_source"]
+        ds["measures"][3]["aliases"] = ["eligible free rate", "免费餐比例"]
+        js = transpile_model(ds)
+        m = re.search(r"freeMealRate: \{[^}]*meta: \{ aliases: \[([^\]]*)\]", js)
+        assert m, js
+        assert "eligible free rate" in m.group(1)
+        assert "免费餐比例" in m.group(1)
+
     def test_avg_maps_to_average(self, frpm_yaml):
         ds = frpm_yaml["data_source"]
         ds["measures"].append({"name": "avg_enrollment", "agg": "AVG", "expr": "enrollment_k12"})
