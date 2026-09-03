@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>术语、数据模型、本体、知识图谱：关系、对比与落地</title>
+<style>
+  :root {
+    --ink: #1a2332;
+    --muted: #5a6b7f;
+    --line: #d9e2ec;
+    --bg: #ffffff;
+    --bg-soft: #f4f7fa;
+    --accent: #0b6e99;
+    --accent-soft: #e3f1f8;
+    --warn: #b3541e;
+    --ok: #2e7d4f;
+    --th: #102a43;
+  }
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Segoe UI", sans-serif;
+    color: var(--ink);
+    background: var(--bg);
+    margin: 0;
+    line-height: 1.75;
+    font-size: 15.5px;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 48px 40px 96px; }
+  h1 { font-size: 30px; line-height: 1.35; border-bottom: 3px solid var(--accent); padding-bottom: 16px; margin-bottom: 8px; }
+  h1 + .meta { color: var(--muted); font-size: 13.5px; margin-bottom: 32px; }
+  h2 { font-size: 23px; margin-top: 64px; padding: 10px 0 10px 14px; border-left: 5px solid var(--accent); background: linear-gradient(90deg, var(--accent-soft), transparent 70%); }
+  h3 { font-size: 18px; margin-top: 40px; color: var(--th); }
+  h4 { font-size: 16px; margin-top: 28px; }
+  p { margin: 12px 0; }
+  ul, ol { padding-left: 26px; margin: 10px 0; }
+  li { margin: 5px 0; }
+  code, .mono { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 0.92em; background: var(--bg-soft); padding: 1px 5px; border-radius: 4px; }
+  table { border-collapse: collapse; width: 100%; margin: 20px 0; font-size: 13.8px; line-height: 1.6; }
+  th { background: var(--th); color: #fff; padding: 9px 11px; text-align: left; vertical-align: top; font-weight: 600; }
+  td { border: 1px solid var(--line); padding: 9px 11px; vertical-align: top; }
+  tbody tr:nth-child(even) { background: var(--bg-soft); }
+  .toc { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 10px; padding: 20px 26px; margin: 28px 0; }
+  .toc h2 { all: unset; font-size: 16px; font-weight: 700; display: block; margin-bottom: 10px; color: var(--th); }
+  .toc ol { margin: 0; columns: 2; column-gap: 40px; }
+  .toc li { break-inside: avoid; }
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); border-radius: 0 8px 8px 0; padding: 12px 18px; margin: 18px 0; }
+  .callout.warn { border-color: var(--warn); background: #fdf1e7; }
+  .callout.ok { border-color: var(--ok); background: #eaf5ee; }
+  .callout .t { font-weight: 700; display: block; margin-bottom: 4px; }
+  figure { margin: 28px 0; text-align: center; }
+  figure svg { max-width: 100%; height: auto; }
+  figcaption { font-size: 13px; color: var(--muted); margin-top: 10px; text-align: center; }
+  .stack-fig { overflow-x: auto; }
+  .verdict { border: 2px solid var(--ok); border-radius: 10px; padding: 14px 20px; margin: 20px 0; background: #f2f9f5; }
+  .verdict .t { font-weight: 800; color: var(--ok); }
+  .tag { display: inline-block; font-size: 12px; font-weight: 700; padding: 1px 9px; border-radius: 20px; margin-right: 6px; vertical-align: 1px; }
+  .tag.design { background: #e3f1f8; color: #0b6e99; }
+  .tag.runtime { background: #f4ecfb; color: #6b3fa0; }
+  .tag.both { background: #fdeef0; color: #b03050; }
+  .lvl { font-weight: 700; color: var(--accent); }
+  footer { margin-top: 80px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--line); padding-top: 16px; }
+  @media print {
+    .wrap { max-width: none; padding: 0 8mm; }
+    h2 { page-break-after: avoid; }
+    figure, table { page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>术语、数据模型、本体、知识图谱<br>——关系、全面对比与企业落地</h1>
+<div class="meta">
+定位：技术选型参考（非学术综述）· 读者：GienBI / datus 团队工程师与架构师 ·
+立场：带明确工程判断，服务于"要不要用本体、用在哪、用多深"的决策 ·
+2026-09 · design/ontology_and_semantic_layers.html（自包含单文件，离线可读）
+</div>
+
+<div class="toc">
+<h2>目录</h2>
+<ol>
+  <li><a href="#p1">四概念的关系与全面对比</a></li>
+  <li><a href="#p2">本体在 ERP / MES / HRMS / CRM 中的落地</a></li>
+  <li><a href="#p3">本体在数据分析中的位置与设计落地</a></li>
+  <li><a href="#p4">业界实践、开源中间件与行业趋势</a></li>
+  <li><a href="#p5">案例章：datus 语义层的本体定位与升级路线</a></li>
+</ol>
+</div>
+
+<!-- ============================================================ -->
+<h2 id="p1">一、四概念的关系与全面对比</h2>
+
+<p>这四个词在日常讨论中经常被混用——"我们的数据模型就是本体"、"知识图谱就是图数据库"——
+而这种混用掩盖了它们各自回答的不同问题。先把关系说清，再做逐维度对比。</p>
+
+<figure>
+<svg viewBox="0 0 980 560" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, PingFang SC, sans-serif">
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#5a6b7f"/>
+    </marker>
+    <marker id="arrA" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0b6e99"/>
+    </marker>
+  </defs>
+  <!-- 抽象层级泳道标签 -->
+  <text x="30" y="120" font-size="14" fill="#5a6b7f" font-weight="700">概念层</text>
+  <text x="30" y="130" font-size="11" fill="#9aa8b6">（人类共识）</text>
+  <text x="30" y="320" font-size="14" fill="#5a6b7f" font-weight="700">模式层</text>
+  <text x="30" y="331" font-size="11" fill="#9aa8b6">（结构与规则）</text>
+  <text x="30" y="500" font-size="14" fill="#5a6b7f" font-weight="700">实例层</text>
+  <text x="30" y="511" font-size="11" fill="#9aa8b6">（具体数据）</text>
+  <line x1="118" y1="60" x2="118" y2="545" stroke="#d9e2ec" stroke-dasharray="5 5"/>
+  <line x1="118" y1="215" x2="960" y2="215" stroke="#d9e2ec" stroke-dasharray="5 5"/>
+  <line x1="118" y1="400" x2="960" y2="400" stroke="#d9e2ec" stroke-dasharray="5 5"/>
+
+  <!-- 术语表 -->
+  <g>
+    <rect x="170" y="70" rx="12" width="230" height="105" fill="#e3f1f8" stroke="#0b6e99" stroke-width="2"/>
+    <text x="285" y="100" text-anchor="middle" font-size="18" font-weight="800" fill="#102a43">术语表 Glossary</text>
+    <text x="285" y="126" text-anchor="middle" font-size="12.5" fill="#3e5c76">"GMV 是什么意思？口径谁定的？"</text>
+    <text x="285" y="147" text-anchor="middle" font-size="12" fill="#5a6b7f">自然语言 · 词 ↔ 释义 · 人读为主</text>
+  </g>
+
+  <!-- 本体 -->
+  <g>
+    <rect x="560" y="62" rx="12" width="300" height="120" fill="#f4ecfb" stroke="#6b3fa0" stroke-width="2.5"/>
+    <text x="710" y="95" text-anchor="middle" font-size="19" font-weight="800" fill="#3d2160">本体 Ontology</text>
+    <text x="710" y="121" text-anchor="middle" font-size="12.5" fill="#57407a">"这个领域有哪些类的事物？</text>
+    <text x="710" y="140" text-anchor="middle" font-size="12.5" fill="#57407a">它们之间有什么关系、约束、层级？"</text>
+    <text x="710" y="164" text-anchor="middle" font-size="12" fill="#7a68a0">概念 + 关系 + 公理 · 机器可读 · 与实现无关</text>
+  </g>
+
+  <!-- 数据模型 -->
+  <g>
+    <rect x="170" y="250" rx="12" width="260" height="115" fill="#eaf5ee" stroke="#2e7d4f" stroke-width="2"/>
+    <text x="300" y="282" text-anchor="middle" font-size="18" font-weight="800" fill="#1c4531">数据模型 Data Model</text>
+    <text x="300" y="308" text-anchor="middle" font-size="12.5" fill="#3c6b52">"这张表有哪些列？什么类型？</text>
+    <text x="300" y="326" text-anchor="middle" font-size="12.5" fill="#3c6b52">外键连到哪？怎么存？"</text>
+    <text x="300" y="350" text-anchor="middle" font-size="12" fill="#5f8a72">ER / UML / DDL · 绑定具体系统实现</text>
+  </g>
+
+  <!-- 知识图谱 -->
+  <g>
+    <rect x="600" y="440" rx="12" width="320" height="110" fill="#fdf1e7" stroke="#b3541e" stroke-width="2.5"/>
+    <text x="760" y="472" text-anchor="middle" font-size="18" font-weight="800" fill="#7a3a13">知识图谱 KG</text>
+    <text x="760" y="498" text-anchor="middle" font-size="12.5" fill="#96603a">"张三任职于 A 公司，A 公司是 B 的供应商"</text>
+    <text x="760" y="520" text-anchor="middle" font-size="12" fill="#a87b57">本体(schema) + 实例网络 · 实体消解 · 事实三元组</text>
+  </g>
+
+  <!-- 数据库 -->
+  <g>
+    <rect x="170" y="445" rx="12" width="230" height="100" fill="#f4f7fa" stroke="#5a6b7f" stroke-width="1.8"/>
+    <text x="285" y="478" text-anchor="middle" font-size="16" font-weight="700" fill="#3e5c76">数据库 / 数据仓库</text>
+    <text x="285" y="504" text-anchor="middle" font-size="12" fill="#5a6b7f">按数据模型存放的实例数据</text>
+  </g>
+
+  <!-- 关系箭头 -->
+  <!-- 术语 -> 本体: 命名锚点 -->
+  <path d="M 400 110 C 470 95, 500 95, 556 105" fill="none" stroke="#0b6e99" stroke-width="2" marker-end="url(#arrA)"/>
+  <text x="478" y="88" text-anchor="middle" font-size="11.5" fill="#0b6e99">命名 / 标注</text>
+  <text x="478" y="101" text-anchor="middle" font-size="10.5" fill="#5a6b7f">(prefLabel / altLabel)</text>
+
+  <!-- 术语 -> 数据模型: 字段注释 -->
+  <path d="M 285 175 C 285 200, 285 220, 285 246" fill="none" stroke="#5a6b7f" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <text x="352" y="216" font-size="11.5" fill="#5a6b7f">字段注释 / 命名来源</text>
+
+  <!-- 本体 -> 数据模型: 投影 -->
+  <path d="M 600 168 C 520 200, 440 225, 380 248" fill="none" stroke="#6b3fa0" stroke-width="2" marker-end="url(#arrA)"/>
+  <text x="530" y="196" text-anchor="middle" font-size="11.5" fill="#6b3fa0">投影 / 指导设计</text>
+  <text x="530" y="209" text-anchor="middle" font-size="10.5" fill="#5a6b7f">(top-down)</text>
+
+  <!-- 数据模型 -> 本体: 反向提炼 -->
+  <path d="M 430 330 C 530 320, 560 250, 590 190" fill="none" stroke="#2e7d4f" stroke-width="2" marker-end="url(#arrA)"/>
+  <text x="545" y="278" text-anchor="middle" font-size="11.5" fill="#2e7d4f">反向提炼</text>
+  <text x="545" y="291" text-anchor="middle" font-size="10.5" fill="#5a6b7f">(bottom-up 复用)</text>
+
+  <!-- 本体 -> KG: 约束 -->
+  <path d="M 760 182 C 760 260, 760 340, 762 436" fill="none" stroke="#6b3fa0" stroke-width="2.2" marker-end="url(#arrA)"/>
+  <text x="852" y="300" text-anchor="middle" font-size="11.5" fill="#6b3fa0">提供 schema：类、关系、</text>
+  <text x="852" y="313" text-anchor="middle" font-size="11.5" fill="#6b3fa0">约束实例网络</text>
+  <text x="852" y="328" text-anchor="middle" font-size="10.5" fill="#5a6b7f">(类比 DDL 之于表数据)</text>
+
+  <!-- KG -> 本体: 模式归纳 -->
+  <path d="M 680 436 C 670 330, 675 260, 680 186" fill="none" stroke="#5a6b7f" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#arr)"/>
+  <text x="636" y="308" text-anchor="end" font-size="10.5" fill="#5a6b7f">新关系归纳回流</text>
+
+  <!-- 数据库 -> KG: ETL 抽取 -->
+  <path d="M 400 492 C 470 492, 520 494, 596 496" fill="none" stroke="#b3541e" stroke-width="2" marker-end="url(#arrA)"/>
+  <text x="498" y="483" text-anchor="middle" font-size="11.5" fill="#b3541e">ETL 抽取 / 实体消解</text>
+  <text x="498" y="470" text-anchor="middle" font-size="10.5" fill="#5a6b7f">(行数据 → 实体节点 + 关系边)</text>
+
+  <!-- 数据模型 -> 数据库 -->
+  <path d="M 285 365 C 285 390, 285 405, 285 441" fill="none" stroke="#2e7d4f" stroke-width="2" marker-end="url(#arrA)"/>
+  <text x="352" y="412" font-size="11.5" fill="#2e7d4f">定义结构</text>
+</svg>
+<figcaption>图 1 · 四概念关系图：术语是概念的命名锚点；本体是领域概念的形式化规范；数据模型是本体在具体系统上的物理投影；知识图谱 = 本体(schema) + 实例数据</figcaption>
+</figure>
+
+<h3>1.1 一句话讲清每个概念</h3>
+<ul>
+  <li><b>术语（Terminology / Glossary / 业务字典）</b>：业务词汇与解释的受控集合，回答"这个词是什么意思、口径是什么"。它是概念层的<em>自然语言锚点</em>——本体里的类叫什么名字（prefLabel）、有哪些同义词（altLabel）、数据模型的字段注释，最终都要回到术语。</li>
+  <li><b>数据模型（Data Model）</b>：特定系统里数据的结构定义——ER 图、UML 类图、DDL、JSON Schema。它回答"数据长什么样、怎么存、怎么关联"。数据模型<b>绑定具体实现</b>：一张表的列、类型、外键，是为了某个系统的存储与查询效率而设计的。</li>
+  <li><b>本体（Ontology）</b>：一个领域内概念（类）、属性（关系）、公理（约束与规则）的<b>形式化、与实现无关的规范</b>。它回答"这个领域里存在哪些种类的事物，它们之间的关系和约束是什么"。本体不关心存储，只关心语义共识——"客户"是什么、"订单"与"客户"是什么关系、"供应商是企业的子类"这类断言。</li>
+  <li><b>知识图谱（Knowledge Graph）</b>：用本体（或轻量 schema）约束起来的<b>实体实例网络</b>——具体的人、公司、商品作为节点，它们之间的事实关系作为边。本体是 KG 的模式层，实例是 KG 的数据层。<span class="mono">本体 : KG ≈ DDL : 表数据</span>。</li>
+</ul>
+
+<h3>1.2 逐概念：与其他三者的关系</h3>
+
+<h4>术语表 与其他三者</h4>
+<ul>
+  <li><b>→ 本体</b>：术语是本体的词汇表面。SKOS（Simple Knowledge Organization System）就是专门把术语表/同义词/层级关系规范化的 W3C 标准——本体的每个类应挂 prefLabel 与 altLabel，术语表因此成为本体建模的第一批输入。</li>
+  <li><b>→ 数据模型</b>：好的字段命名与注释来自术语表；术语表落不了地的组织，字段名就是<code>cstm_no</code>这类黑话。</li>
+  <li><b>→ 知识图谱</b>：KG 的实体消解（同一现实事物不同表述）依赖术语的同义词信息。</li>
+</ul>
+
+<h4>数据模型 与其他三者</h4>
+<ul>
+  <li><b>→ 本体</b>：数据模型是本体在某系统的投影（top-down），也是本体的最大素材来源（bottom-up：从多套 schema 反向提炼共同概念）。关键区别在于<b>变更动因不同</b>：数据模型跟系统走（性能、范式化、团队习惯），本体跟业务共识走。</li>
+  <li><b>→ 术语</b>：术语表为字段命名与注释提供标准词汇。</li>
+  <li><b>→ KG</b>：KG 的实例大多从按数据模型存储的库表经 ETL/抽取而来；抽取映射（哪张表哪列构成什么实体）本身是本体层的知识。</li>
+</ul>
+
+<h4>本体 与其他三者</h4>
+<ul>
+  <li><b>→ 术语</b>：本体为术语提供结构（不只是同义词，还有上位/下位、整体/部分关系）。</li>
+  <li><b>→ 数据模型</b>：本体指导 schema 设计（先共识"客户"与"账户"的关系，再落到外键）；同一本体可投影出多套 schema。两者必须同步演进——本体变了 schema 不变，语义债就产生了。</li>
+  <li><b>→ KG</b>：本体是 KG 的 schema 与约束源；KG 是本体在数据上的实例化与验证场。</li>
+</ul>
+
+<h4>知识图谱 与其他三者</h4>
+<ul>
+  <li><b>→ 本体</b>：没有本体的"图数据库"只是一堆节点和边，查询无法推理（"供应商"是否是"合作方"的子类？）；本体赋予图语义。</li>
+  <li><b>→ 数据模型</b>：图模型（属性图/RDF）本身也是一种数据模型——这是概念混淆的高发点：图数据库是存储技术，知识图谱是语义资产。</li>
+  <li><b>→ 术语</b>：实体消解与检索需要术语的同义词与消歧信息。</li>
+</ul>
+
+<h3>1.3 十一维度对比总表</h3>
+
+<table>
+<thead>
+<tr>
+  <th style="width:11%">维度</th>
+  <th>术语表 / 业务字典</th>
+  <th>数据模型</th>
+  <th>本体</th>
+  <th>知识图谱</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><b>本质定义</b></td>
+  <td>业务词汇 + 释义 + 口径的受控清单</td>
+  <td>特定系统的数据结构定义（ER/UML/DDL）</td>
+  <td>领域概念、关系、公理的形式化规范，与实现无关</td>
+  <td>本体约束下的实体实例关系网络</td>
+</tr>
+<tr>
+  <td><b>回答的核心问题</b></td>
+  <td>"GMV 是什么？算不算退款？谁负责定义？"</td>
+  <td>"表有哪些列？类型？外键？如何范式化？"</td>
+  <td>"领域里有哪些类的事物？它们之间有何关系与约束？"</td>
+  <td>"张三与 A 公司什么关系？A 的二级供应商是谁？"</td>
+</tr>
+<tr>
+  <td><b>抽象层级</b></td>
+  <td>概念层（自然语言）</td>
+  <td>模式层（逻辑/物理设计）</td>
+  <td>概念层（形式化）</td>
+  <td>模式层 + 实例层（数据资产）</td>
+</tr>
+<tr>
+  <td><b>形式化程度</b></td>
+  <td>低：自然语言，无机器语义</td>
+  <td>中：结构精确，语义靠约定（约束即结构）</td>
+  <td>高：可含形式逻辑公理，支持机器推理（子类传递、等价、互斥）</td>
+  <td>中-高：取决于所挂本体；实例事实可推理补全</td>
+</tr>
+<tr>
+  <td><b>典型技术与标准</b></td>
+  <td>Excel/Confluence（失败态）、数据目录术语模块、SKOS</td>
+  <td>ERwin、PowerDesigner、dbt schema、DDL、JSON Schema</td>
+  <td>RDF/OWL、SKOS、SHACL、Protégé；工程化轻量形态：YAML 领域模型</td>
+  <td>Neo4j/NebulaGraph（属性图）、GraphDB/Virtuoso（RDF 三元组）、SPARQL/Cypher/GQL</td>
+</tr>
+<tr>
+  <td><b>谁拥有、谁维护</b></td>
+  <td>业务方 + 数据治理；owner 机制是生命线</td>
+  <td>应用开发团队 / DBA</td>
+  <td>架构师 + 业务专家共建（知识工程角色）；数据团队代管是常态</td>
+  <td>数据平台团队构建，业务消费；需要持续 ETL 与消解维护</td>
+</tr>
+<tr>
+  <td><b>与数据库 schema 的关系</b></td>
+  <td>独立文档，靠人肉映射到字段（易脱节）</td>
+  <td>就是 schema 本身</td>
+  <td>schema 之上的语义覆盖层：一个本体概念可对应多套 schema 实现</td>
+  <td>从多源 schema 抽取实例而成；映射关系是本体层资产</td>
+</tr>
+<tr>
+  <td><b>与周边概念的关系</b></td>
+  <td>本体的词汇层、数据模型命名的源头</td>
+  <td>本体的投影与素材；KG 实例的来源</td>
+  <td>术语的结构化升华；数据模型的语义契约；KG 的 schema</td>
+  <td>本体 + 实例；术语提供消解依据</td>
+</tr>
+<tr>
+  <td><b>与周边系统的关系</b></td>
+  <td>数据目录、BI 平台术语层、Wiki</td>
+  <td>数据库、ERP/MES/CRM 核心业务系统、数仓 ETL</td>
+  <td>MDM 主数据平台、集成中间件、数据目录、语义层/指标平台</td>
+  <td>图数据库/知识服务、推荐、风控反欺诈、智能问答</td>
+</tr>
+<tr>
+  <td><b>在系统设计流程中的定位</b></td>
+  <td>需求分析阶段的词汇表</td>
+  <td>逻辑设计 + 物理设计产物</td>
+  <td>概念设计产物（承上：业务语言；启下：约束 schema 与集成契约）</td>
+  <td>运行期数据资产（建成后持续运营）</td>
+</tr>
+<tr>
+  <td><b>典型失败模式</b></td>
+  <td>无人维护的 Excel 术语表；定义了没人看，口径照样打架</td>
+  <td>过度泛化的"万能表"；为迁就实现牺牲语义；多系统各自建模同名不同义</td>
+  <td>过度设计：追求大而全的"企业本体"，形式化程度超出场景需要，变成无人消费的学术工程；与 schema 演进脱节产生语义债</td>
+  <td>脏数据沼泽：实体消解质量差，图谱可信度崩塌；建完没人查询，运营断档</td>
+</tr>
+</tbody>
+</table>
+
+<h3>1.4 一个关键分法：设计期契约 vs 运行时语义层</h3>
+<p>讨论本体落地时最容易被跳过、但对选型最关键的分法，是本体在系统生命周期中的<b>两种用法</b>：</p>
+<ul>
+  <li><span class="tag design">设计期契约</span>：本体作为设计资产——指导 schema 设计、约束接口语义、校验数据质量（SHACL 风格）。它活在 Git、建模工具和 CI 里，不进运行时链路。成本：一次性建模 + 演进纪律。</li>
+  <li><span class="tag runtime">运行时语义层</span>：本体作为运行时资产——跨系统查询的统一语义视图、推理服务（"合作方"⊇"供应商"自动展开）、数据映射引擎的规则源。它活在中间件和查询链路里。成本：性能、可用性、持续运营。</li>
+  <li><span class="tag both">两者兼有</span>：如 ERP 主数据（设计期定义黄金语义，运行期做映射归一）、制造业 ISA-95（设计期信息模型标准 + 运行期 B2MML 报文语义）。</li>
+</ul>
+<div class="callout">
+<span class="t">工程判断</span>
+优先以设计期契约的形态引入本体（成本低、风险小、见效于数据质量与集成一致性）；只有当出现明确的运行时需求（跨系统语义查询、推理展开、实时映射）时，才把本体推进运行时链路。反过来做（先上图数据库再找场景）是知识图谱项目失败的头号路径。
+</div>
+
+<!-- ============================================================ -->
+<h2 id="p2">二、本体在 ERP / MES / HRMS / CRM 中的落地</h2>
+
+<p>企业信息系统是本体最古老的落地场——因为这些系统的核心痛点从来不是"存不下数据"，而是<b>同一个业务概念在 N 套系统里有 N 种建模</b>，集成与汇总时语义对不上。本章按访谈决策：ERP 与 MES 各一大节（它们代表两种最典型的落地模式），HRMS 与 CRM 以同构小节简写。</p>
+
+<h3>2.1 ERP：本体作为跨系统集成语义层（主战场）</h3>
+
+<p>ERP 落地的典型形态不是"在 ERP 里建本体"，而是<b>在 ERP 周边建一层本体，充当多系统间的语义契约</b>：</p>
+
+<ul>
+  <li><b>参考标准</b>：SAP 业务对象模型（BO/BAPI——SAP 内部就是一套面向业务对象而非表的语义抽象）、OASIS UBL（Universal Business Language，订单/发票/参与方等 65+ 商业文档的 XML 语义标准）、GS1 主数据标准（全球位置码 GLN、全球贸易项目码 GTIN——商品与参与方身份的本体级约定）。</li>
+  <li><b>落地场景 a：主数据管理（MDM）</b>。"物料"在 ERP 是 MARA 表、在 MES 是 Item Master、在电商平台是 SKU——MDM 平台用本体定义"物料"概念的金标准语义（必有哪些属性、与供应商/ BOM 是什么关系），各系统的本地模型作为本体的投影挂接。本体在这里同时是<span class="tag design">设计期契约</span>（定义黄金记录规则）与<span class="tag runtime">运行时语义层</span>(归一映射引擎的规则源)。</li>
+  <li><b>落地场景 b：跨系统业务对象映射</b>。SAP 订单、自研系统订单、电商平台订单要进同一份数仓：先在本体层声明三者都是 <code>SalesOrder</code> 概念的投影、字段如何对应、状态机如何对齐，映射规则从本体生成而非散落在几十个 ETL 脚本里。</li>
+</ul>
+
+<figure class="stack-fig">
+<svg viewBox="0 0 980 430" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, PingFang SC, sans-serif">
+  <defs>
+    <marker id="arr2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#6b3fa0"/>
+    </marker>
+  </defs>
+  <!-- 本体层 -->
+  <rect x="60" y="30" rx="14" width="860" height="86" fill="#f4ecfb" stroke="#6b3fa0" stroke-width="2.5"/>
+  <text x="490" y="62" text-anchor="middle" font-size="17" font-weight="800" fill="#3d2160">业务本体层（语义契约）：客户 / 供应商 / 物料 / 订单 / 发票 / 组织 / …</text>
+  <text x="490" y="88" text-anchor="middle" font-size="12.5" fill="#57407a">概念定义 + 关系（订单—下给→客户，发票—对应→订单）+ 约束（供应商 ⊑ 合作方） · UBL / GS1 / 自建</text>
+
+  <!-- 映射箭头区 -->
+  <path d="M 240 122 L 240 168" stroke="#6b3fa0" stroke-width="2" marker-end="url(#arr2)"/>
+  <path d="M 490 122 L 490 168" stroke="#6b3fa0" stroke-width="2" marker-end="url(#arr2)"/>
+  <path d="M 740 122 L 740 168" stroke="#6b3fa0" stroke-width="2" marker-end="url(#arr2)"/>
+  <text x="268" y="150" font-size="11.5" fill="#6b3fa0">投影/映射</text>
+  <text x="518" y="150" font-size="11.5" fill="#6b3fa0">投影/映射</text>
+  <text x="768" y="150" font-size="11.5" fill="#6b3fa0">投影/映射</text>
+
+  <!-- 系统层 -->
+  <g>
+    <rect x="130" y="172" rx="10" width="220" height="96" fill="#eaf5ee" stroke="#2e7d4f" stroke-width="2"/>
+    <text x="240" y="202" text-anchor="middle" font-size="15.5" font-weight="700" fill="#1c4531">ERP（SAP / 用友 / 金蝶）</text>
+    <text x="240" y="226" text-anchor="middle" font-size="12" fill="#3c6b52">MARA 物料主数据 · VA01 订单</text>
+    <text x="240" y="246" text-anchor="middle" font-size="12" fill="#3c6b52">KNA1 客户主数据（本地模型）</text>
+  </g>
+  <g>
+    <rect x="380" y="172" rx="10" width="220" height="96" fill="#eaf5ee" stroke="#2e7d4f" stroke-width="2"/>
+    <text x="490" y="202" text-anchor="middle" font-size="15.5" font-weight="700" fill="#1c4531">自研业务系统</text>
+    <text x="490" y="226" text-anchor="middle" font-size="12" fill="#3c6b52">t_material / t_order</text>
+    <text x="490" y="246" text-anchor="middle" font-size="12" fill="#3c6b52">（团队习惯命名的本地模型）</text>
+  </g>
+  <g>
+    <rect x="630" y="172" rx="10" width="220" height="96" fill="#eaf5ee" stroke="#2e7d4f" stroke-width="2"/>
+    <text x="740" y="202" text-anchor="middle" font-size="15.5" font-weight="700" fill="#1c4531">电商平台 / SRM / WMS</text>
+    <text x="740" y="226" text-anchor="middle" font-size="12" fill="#3c6b52">SKU · Item Master</text>
+    <text x="740" y="246" text-anchor="middle" font-size="12" fill="#3c6b52">（外部系统的本地模型）</text>
+  </g>
+
+  <!-- 底部收益条 -->
+  <rect x="60" y="300" rx="12" width="860" height="100" fill="#f4f7fa" stroke="#5a6b7f" stroke-width="1.5"/>
+  <text x="490" y="330" text-anchor="middle" font-size="14" font-weight="700" fill="#102a43">本体层的净收益</text>
+  <text x="490" y="354" text-anchor="middle" font-size="12.5" fill="#3e5c76">新增一套系统 = 新增一份"投影映射"，而不是重写全部点对点集成（N² → N）</text>
+  <text x="490" y="376" text-anchor="middle" font-size="12.5" fill="#3e5c76">跨系统报表/数仓直接按本体概念建模，口径先于实现达成共识 · MDM 归一规则可解释、可审计</text>
+</svg>
+<figcaption>图 2 · ERP 场景：本体作为跨系统集成语义层——各系统保留自己的数据模型，本体定义共识概念与映射</figcaption>
+</figure>
+
+<ul>
+  <li><b>反模式</b>：① 试图用本体<b>替代</b> ERP 数据模型——SAP 的表结构是 40 年运行事实，本体是契约不是替换物，两者并存；② 本体只由 IT 建模没有业务专家参与，概念定义无人认账；③ 映射规则不挂在本体上而散落 ETL 脚本，本体沦为 PPT。</li>
+</ul>
+
+<h3>2.2 MES：本体即信息模型标准（最成熟案例）</h3>
+
+<p>MES（制造执行系统）领域贡献了<b>本体落地最成熟的世界级范本</b>：这里不是"要不要建本体"，而是"要不要遵循已有的行业本体标准"——本体先于实现存在，厂商按本体对齐。</p>
+
+<ul>
+  <li><b>ISA-95 / IEC 62264</b>（企业-控制系统集成标准）：定义了设备层级（Enterprise → Site → Area → Work Center → Work Unit）、四大核心对象（物料定义、人员、工艺段 Process Segment、生产订单/生产绩效）、以及 B2B 到 B2M 边界的对象模型。它本质上就是一份<b>制造运营领域的参考本体</b>——只是用 UML + 文字颁布而非 OWL。</li>
+  <li><b>B2MML</b>（Business To Manufacturing Markup Language）：ISA-95 对象模型的 XML Schema 开源实现——<b>"本体 → schema 投影"的教科书案例</b>：异构 ERP 与异构 MES 之间的报文语义由同一份本体约束。</li>
+  <li><b>OPC UA 信息模型 + Companion Standards</b>：设备与控制层的事实标准。其地址空间本身就是带类型继承的语义模型（对象类型-变量-引用），各行业的 Companion Specification（PackML、PLCopen、机器视觉…）就是一批<b>垂直领域本体</b>。工业 4.0 的资产管理壳（AAS, Asset Administration Shell）进一步把"资产-子资产-文档/能力"的关系标准化。</li>
+</ul>
+
+<figure class="stack-fig">
+<svg viewBox="0 0 980 400" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, PingFang SC, sans-serif">
+  <defs>
+    <marker id="arr3" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0b6e99"/>
+    </marker>
+  </defs>
+  <!-- 标准层 -->
+  <rect x="40" y="24" rx="14" width="900" height="112" fill="#e3f1f8" stroke="#0b6e99" stroke-width="2.5"/>
+  <text x="490" y="52" text-anchor="middle" font-size="16.5" font-weight="800" fill="#0b4a68">行业参考本体层（先于实现存在，厂商按标准对齐）</text>
+  <text x="490" y="78" text-anchor="middle" font-size="13" fill="#12688f">ISA-95 / IEC 62264：设备层级 + 物料/人员/工艺段/生产绩效四大对象</text>
+  <text x="490" y="100" text-anchor="middle" font-size="13" fill="#12688f">OPC UA 信息模型 + Companion Standards · 资产管理壳 AAS（工业 4.0）</text>
+  <text x="490" y="122" text-anchor="middle" font-size="12" fill="#4a7d99">B2MML = ISA-95 本体的 XML Schema 投影（"本体→schema"教科书案例）</text>
+
+  <!-- 投影箭头 -->
+  <path d="M 300 140 L 300 186" stroke="#0b6e99" stroke-width="2" marker-end="url(#arr3)"/>
+  <path d="M 680 140 L 680 186" stroke="#0b6e99" stroke-width="2" marker-end="url(#arr3)"/>
+  <text x="330" y="168" font-size="11.5" fill="#0b6e99">报文/接口按本体对齐（B2MML）</text>
+  <text x="710" y="168" font-size="11.5" fill="#0b6e99">设备语义按本体暴露（OPC UA）</text>
+
+  <!-- 系统层 -->
+  <g>
+    <rect x="100" y="190" rx="10" width="400" height="90" fill="#eaf5ee" stroke="#2e7d4f" stroke-width="2"/>
+    <text x="300" y="220" text-anchor="middle" font-size="15" font-weight="700" fill="#1c4531">异构 ERP（多家）</text>
+    <text x="300" y="246" text-anchor="middle" font-size="12" fill="#3c6b52">各自本地模型 → 映射到 ISA-95 概念</text>
+  </g>
+  <g>
+    <rect x="540" y="190" rx="10" width="340" height="90" fill="#eaf5ee" stroke="#2e7d4f" stroke-width="2"/>
+    <text x="710" y="220" text-anchor="middle" font-size="15" font-weight="700" fill="#1c4531">异构 MES / PLC / SCADA（多家）</text>
+    <text x="710" y="246" text-anchor="middle" font-size="12" fill="#3c6b52">设备/工序语义 → OPC UA / ISA-95</text>
+  </g>
+
+  <!-- 分析收益 -->
+  <rect x="40" y="310" rx="12" width="900" height="72" fill="#fdf1e7" stroke="#b3541e" stroke-width="1.8"/>
+  <text x="490" y="338" text-anchor="middle" font-size="13.5" font-weight="700" fill="#7a3a13">对数据分析的直接意义：多工厂、多厂商 MES 的统一生产报表与制造 BI 成为可能</text>
+  <text x="490" y="362" text-anchor="middle" font-size="12.5" fill="#96603a">OEE、良率、工时按同一本体口径聚合——语义标准化先于 BI 报表，而不是报表各自打补丁</text>
+</svg>
+<figcaption>图 3 · MES 场景：本体即信息模型标准——ISA-95 家族与 OPC UA 如何让异构制造系统语义互通</figcaption>
+</figure>
+
+<ul>
+  <li><b>落地要点</b>：制造业自建 MES/数仓时，<b>直接采用 ISA-95 概念骨架</b>（设备层级 + 四大对象）作为数仓维度模型的语义基准，而不是发明私有概念——行业本体已经替你付过了试错成本。</li>
+  <li><b>反模式</b>：私有命名偏离标准（"工位"vs 标准 Work Center）后再做对齐，等于自己制造一遍集成问题；OPC UA 信息模型用成了"变量字典"（只存数值不建类型层级），语义能力空转。</li>
+</ul>
+
+<h3>2.3 HRMS 与 CRM：ERP 模式的两个变体（简写）</h3>
+
+<h4>HRMS</h4>
+<ul>
+  <li><b>参考标准</b>：HR-Open / HR-XML（Person、Position、Organization 及带时间维的任职关系 Employment-Record）——其核心贡献是把<b>"岗位"与"人"分离、任职关系带时间区间</b>这一语义确立为标准，这是组织架构版本化分析的基础。</li>
+  <li><b>落地场景</b>：① 组织架构本体（法人组织 vs 汇报线 vs 成本中心三种"组织"的区分——混用是 HR 数据混乱的头号原因）；② 岗位-技能本体（招聘画像、培训路径、内部人才市场共享同一技能词汇）。</li>
+  <li><b>反模式</b>：把汇报线当组织层级用（一变就全错）；技能标签无受控词表，同一技能 N 种写法。</li>
+</ul>
+
+<h4>CRM</h4>
+<ul>
+  <li><b>参考标准</b>：行业无强标准，最常用的参考是 Party 模式（Person / Organization / Household 三类参与方 + 角色）与 schema.org 的对外标记词汇。</li>
+  <li><b>落地场景</b>：① 客户 360（多源客户记录的实体消解与合并——本质是运行时本体 + 图计算）；② 关系图谱（决策链、母子公司、社交关系，服务销售与风控——KG 形态最典型）。</li>
+  <li><b>反模式</b>：客户合并规则写死在代码里没有本体层沉淀，换一波人重写一遍；把"联系人"直接当"人"（同一自然人在多客户名下重复）。</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="p3">三、本体在数据分析中的位置与设计落地</h2>
+
+<h3>3.1 主轴：语义层谱系——从术语表到知识图谱的五层</h3>
+
+<p>数据分析场景下讨论本体，正确的问题不是"本体是什么"，而是<b>"语义能力建到哪一层、什么时候值得升级"</b>。下面这条谱系把五个层次按语义能力递进排列，每一层都解决上一层解决不了的一类问题：</p>
+
+<figure class="stack-fig">
+<svg viewBox="0 0 980 560" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, PingFang SC, sans-serif">
+  <!-- 阶梯 -->
+  <g font-size="15" font-weight="800">
+    <rect x="60"  y="440" width="740" height="72" rx="8" fill="#eef2f6" stroke="#8296aa"/>
+    <text x="430" y="470" text-anchor="middle" fill="#3e5c76">L1 术语表 Glossary</text>
+    <text x="430" y="494" text-anchor="middle" font-size="11.5" font-weight="400">词 → 释义 · 解决"口径打架" · 自然语言</text>
+
+    <rect x="120" y="356" width="680" height="72" rx="8" fill="#e3f1f8" stroke="#0b6e99"/>
+    <text x="460" y="386" text-anchor="middle" fill="#0b4a68">L2 业务字典 / 数据目录 Business Dictionary</text>
+    <text x="460" y="410" text-anchor="middle" font-size="11.5" font-weight="400" fill="#12688f">术语绑定物理资产（表/列/报表）+ owner · 解决"知道口径但找不到数据"</text>
+
+    <rect x="180" y="272" width="620" height="72" rx="8" fill="#d8ecdd" stroke="#2e7d4f"/>
+    <text x="490" y="302" text-anchor="middle" fill="#1c4531">L3 语义层 / 指标层 Semantic / Metric Layer</text>
+    <text x="490" y="326" text-anchor="middle" font-size="11.5" font-weight="400" fill="#3c6b52">度量+维度+join 的<b>可执行</b>定义 · 解决"口径靠代码强制一致"（MetricFlow / Cube / OSI）</text>
+
+    <rect x="240" y="188" width="560" height="72" rx="8" fill="#f4ecfb" stroke="#6b3fa0"/>
+    <text x="520" y="218" text-anchor="middle" fill="#3d2160">L4 轻量本体 Lightweight Ontology</text>
+    <text x="520" y="242" text-anchor="middle" font-size="11.5" font-weight="400" fill="#57407a">跨源概念等价/层级 · 受控词表 · 概念级约束（权限） · 机器可读关系</text>
+
+    <rect x="300" y="104" width="500" height="72" rx="8" fill="#fdf1e7" stroke="#b3541e"/>
+    <text x="550" y="134" text-anchor="middle" fill="#7a3a13">L5 完整本体 + 知识图谱 OWL/KG</text>
+    <text x="550" y="158" text-anchor="middle" font-size="11.5" font-weight="400" fill="#96603a">形式推理（传递/等价/逆反） · 实例图谱 · 多跳关系分析 · GraphRAG</text>
+  </g>
+
+  <!-- 升级触发条件（右侧标注） -->
+  <g font-size="11.5" fill="#5a6b7f">
+    <text x="816" y="482">↑ 升级触发：</text>
+    <text x="816" y="500">术语找不到数据</text>
+    <text x="876" y="398">↑ 口径需要</text>
+    <text x="876" y="416">代码强制</text>
+    <text x="836" y="314">↑ 多数据源出现同一概念</text>
+    <text x="836" y="332">多处定义、需要跨源对齐</text>
+    <text x="856" y="230">↑ 需要多跳关系推理、</text>
+    <text x="856" y="248">实体级图谱分析</text>
+  </g>
+
+  <!-- 成本轴 -->
+  <g stroke="#5a6b7f" stroke-width="1.5">
+    <line x1="60" y1="80" x2="920" y2="80" marker-end="url(#arr)"/>
+  </g>
+  <text x="940" y="72" font-size="12.5" fill="#5a6b7f" text-anchor="end" font-weight="700">成本 / 维护负担 / 组织成熟度要求 →→</text>
+  <text x="68" y="72" font-size="12.5" fill="#5a6b7f" font-weight="700">← 快速见效</text>
+  <text x="490" y="46" text-anchor="middle" font-size="13" fill="#5a6b7f">关键原则：<b>停在业务触发条件到达的那一层</b>——每上一层的成本是指数增长，价值是场景驱动</text>
+</svg>
+<figcaption>图 4 · 语义层谱系：五层语义能力，右侧为升级触发条件——不到触发不动，是本文档最核心的工程立场</figcaption>
+</figure>
+
+<table>
+<thead>
+<tr><th style="width:12%">层级</th><th style="width:30%">增量价值（解决上一层解决不了的）</th><th style="width:28%">代表形态</th><th style="width:30%">升级触发条件（没有就别升）</th></tr>
+</thead>
+<tbody>
+<tr><td class="lvl">L1 术语表</td><td>统一词汇与口径解释，跨团队对话有共同语言</td><td>治理平台术语模块、Confluence（失败态常见）</td><td>术语与物理数据脱节、分析人员频繁问"这个口径在哪张表"→ 升 L2</td></tr>
+<tr><td class="lvl">L2 业务字典</td><td>术语绑定到物理资产与 owner，可检索可问责</td><td>数据目录（DataHub / OpenMetadata / Atlas）</td><td>同一指标各报表 SQL 各写各的、口径靠人肉对齐 → 升 L3</td></tr>
+<tr><td class="lvl">L3 语义层 / 指标层</td><td>口径变成<b>可执行代码</b>：一处定义、处处一致；问数/BI/API 共用</td><td>MetricFlow、Cube、LookML、<b>datus OSI YAML</b></td><td>多数据源/多模型出现"同一概念多处定义"（dim_customer vs dim_users），需要跨源等价、受控词表、行级权限语义 → 升 L4</td></tr>
+<tr><td class="lvl">L4 轻量本体</td><td>机器可读的概念关系：跨源对齐、概念级访问控制、维度值受控</td><td>YAML/JSON 领域模型 + 目录/语义层集成（<b>datus 已部分到达</b>）</td><td>需要形式推理（传递闭包、等价展开）、实体级多跳分析（风控穿透、影响传播）→ 升 L5</td></tr>
+<tr><td class="lvl">L5 本体 + KG</td><td>推理补全事实、多跳图查询、GraphRAG 结构化知识源</td><td>OWL + 图库（GraphDB / Neo4j）、FIBO 类行业本体</td><td>——（到达此层的组织应先自证 L1-L4 扎实）</td></tr>
+</tbody>
+</table>
+
+<h3>3.2 场景校验：每层拿什么分析场景证明自己</h3>
+<ul>
+  <li><b>问数选指标</b>（"上季度华东 GMV 多少"）：L1 术语告诉 LLM "GMV" 是什么；L3 让"GMV"绑定唯一可执行定义；L4 的 aliases/同义断言让"成交总额""总营收"都路由到同一概念。<b>datus 的 metric store + aliases 正是 L3→L4 的实证。</b></li>
+  <li><b>维度过滤选值</b>（"StatusType = 'Active'"）：L4 受控词表声明该列的合法值域与含义（Active/Closed/Merged），LLM 不再猜编码列——datus BIRD 实验中 R2 命名错位类失败的解法本质就是补 L4 能力。</li>
+  <li><b>跨表 join 推断</b>（frpm ↔ schools 通过 CDSCode）：L3 的 identifier join 是显式关系断言；L5 可以推理"学区→学校→县"的传递链并回答"某学区的所有县的供应商"这类多跳问题。</li>
+  <li><b>数据目录导航</b>（"找客户相关的所有资产"）：L2 提供资产索引；L4 提供概念层级导航（客户→企业客户→战略客户）；L5 提供血缘图谱（这张表影响了哪些下游指标）。</li>
+</ul>
+
+<h3>3.3 设计原则（方法论开篇）</h3>
+<ol>
+  <li><b>场景先行，范围最小</b>：本体为一个明确痛点场景而生（跨源对齐？权限语义？目录导航？），不做"全企业本体"。</li>
+  <li><b>复用优先于自建</b>：行业标准（ISA-95 / UBL / FIBO / HR-Open / schema.org）已付过试错成本；自建仅做增量。</li>
+  <li><b>渐进形式化</b>：形式化程度由<b>机器消费需求</b>决定——只需要人读与检索，SKOS 足够；需要校验约束，SHACL 风格；需要推理，才上 OWL 公理。每一步形式化都要能指出"哪段代码/哪个查询消费了它"。</li>
+  <li><b>本体即代码</b>：本体进 Git、进 CI（结构校验 + 与 schema 的一致性测试）、与数据模型同仓演进。任何不进版本库的"本体"都会在六个月内与现实脱节。</li>
+  <li><b>与 schema 联动演进</b>：本体变更触发 schema 评审，schema 变更反向检查本体——单边演进产生语义债。</li>
+  <li><b>治理内嵌</b>：每个概念有 owner、变更走评审、上线进目录——没有治理的本体是下一个无人维护的 Excel 术语表。</li>
+</ol>
+
+<h3>3.4 七步落地流程</h3>
+<ol>
+  <li><b>确定范围与场景</b>：写一页"本体解决什么"的场景说明书，含 2-3 个可验证的用例（例如"跨两个数据源的客户概念对齐"）。写不出来就停。</li>
+  <li><b>盘点既有资产</b>：现有术语表、ER 模型、指标定义、数据目录——本体从这些资产提炼，不从白纸开始。</li>
+  <li><b>复用领域标准</b>：对照行业标准清单（ERP→UBL/GS1；制造→ISA-95；金融→FIBO；HR→HR-Open；通用→schema.org），声明"采用哪些、扩展哪些、偏离哪些及原因"。</li>
+  <li><b>混合建模</b>：top-down 用标准/上层骨架定核心概念与关系；bottom-up 从 schema 与指标定义反向提炼属性与词表。两条线在"概念-物理映射表"处汇合——这张映射表是本体最实干的产物。</li>
+  <li><b>选择形式化程度</b>：按 3.3 原则 3 与 3.5 选型表决定表达技术。</li>
+  <li><b>本体即代码工程化</b>：版本库结构（本体与 schema 同仓）、CI 校验（结构 lint、映射完整性、破坏性变更检测）、发布物（目录可见 / 语义层可加载）。</li>
+  <li><b>治理与演进</b>：概念 owner 矩阵、变更评审流程（本体变更 = 代码级 PR）、与数据目录的自动同步、季度健康检查（孤儿概念、无消费断言、映射失效）。</li>
+</ol>
+
+<h3>3.5 表达技术选型表</h3>
+<table>
+<thead>
+<tr><th style="width:16%">技术</th><th>表达能力</th><th>工具与生态</th><th>查询能力</th><th>与关系库/现有栈集成</th><th>团队学习成本</th></tr>
+</thead>
+<tbody>
+<tr><td><b>SKOS</b>（术语/分类）</td><td>弱：同义、层级、注释，无公理</td><td>好：目录平台原生支持</td><td>SPARQL</td><td>中</td><td><b>低</b></td></tr>
+<tr><td><b>RDF + OWL</b>（完整本体）</td><td><b>最强</b>：类公理、可推理（传递/等价/互斥）</td><td>Protégé / OWL API / Jena</td><td>SPARQL + 推理机</td><td>高（与关系栈异构，需 ETL 成 RDF）</td><td><b>高</b>（描述逻辑门槛）</td></tr>
+<tr><td><b>SHACL</b>（约束校验）</td><td>中：形状约束、数据质量规则</td><td>pySHACL 等，CI 友好</td><td>校验报告（非查询）</td><td>中</td><td>中</td></tr>
+<tr><td><b>属性图</b>（Neo4j / NebulaGraph）</td><td>中：类型+边+属性，无形式推理</td><td><b>最好</b>：图算法、可视化、云服务</td><td>Cypher / GQL（ISO 标准已发布）</td><td>好（成熟 ETL、JDBC）</td><td><b>低</b></td></tr>
+<tr><td><b>轻量 YAML</b>（JSON-LD 风格）</td><td>取决于自定义 schema</td><td>Git/CI 原生、无专门工具</td><td>自定义（应用层解析）</td><td><b>零距离</b>（与应用栈同构）</td><td><b>最低</b></td></tr>
+</tbody>
+</table>
+
+<div class="verdict">
+<span class="t">选型结论（明确工程立场）</span>
+绝大多数数据分析场景（L3-L4 层需求）：<b>轻量 YAML 本体（进 Git、CI 校验）+ 语义层/指标层直接消费 + 需要图分析时属性图存储实例</b>，这一组合性价比最高。OWL/RDF 只在两个条件下值得引入：① 存在真实的形式推理需求（规则复杂到人工展开不可维护）；② 行业强制标准本身是 RDF 形态（如金融 FIBO）。把"图数据库"当"知识图谱"采购、把"Protégé 建模"当"本体落地"，是本领域最常见的两类预算黑洞。
+</div>
+
+<h3>3.6 反模式清单</h3>
+<ul>
+  <li><b>一上来上 OWL 全家桶</b>：描述逻辑的学习与维护成本没有对应消费方，三个月后仓库冻结。</li>
+  <li><b>本体团队与数据团队脱节</b>：知识工程师不碰数据管道，产出的概念无人消费。</li>
+  <li><b>本体不与 schema 联动</b>：schema 演进六轮本体纹丝不动，映射全失效——语义债比技术债更难还，因为它骗人。</li>
+  <li><b>追求大而全的"企业本体"</b>：一次性建模十万概念，任何业务方都不敢用，也不敢改。</li>
+  <li><b>先买图数据库再找场景</b>：存储技术先行于语义需求，结局是图库里放着三张试点表。</li>
+  <li><b>KG 建成不运营</b>：实体消解无持续机制，图的新鲜度与可信度随时间崩塌。</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="p4">四、业界实践、开源中间件与行业趋势</h2>
+
+<h3>4.1 标杆实践：谁在什么规模上做成了什么</h3>
+<table>
+<thead><tr><th style="width:22%">实践</th><th style="width:16%">谱系层级</th><th>做成的事与可借鉴点</th></tr></thead>
+<tbody>
+<tr><td><b>Google Knowledge Graph</b>（2012–）</td><td>L5</td><td>"things, not strings"——搜索结果直接呈现实体与关系。证明了消费级规模（数十亿实体）的 KG 必须是<b>本体约束 + 持续抽取管线</b>的组合；schema.org 是其对外词汇面。</td></tr>
+<tr><td><b>Wikidata / DBpedia</b></td><td>L5</td><td>全球最大的开放本体+实例库（1 亿+ 实体）。可借鉴：众包治理机制、SPARQL 端点、跨语言同义（多语言 altLabel 的活教材）。</td></tr>
+<tr><td><b>SNOMED CT / Gene Ontology</b></td><td>L4-L5</td><td>医疗与生物领域的受控词表+本体，<b>术语系统演化为本体的最成功案例</b>。可借鉴：概念的严格版本化（Gene Ontology 的版本发布纪律业界顶尖）与跨机构映射机制。</td></tr>
+<tr><td><b>FIBO</b>（金融行业本体，EDM Council）</td><td>L4-L5</td><td>金融概念（贷款、衍生品、当事方）的行业标准本体，监管报送与跨行互操作的语义基准。可借鉴：<b>行业联盟共建本体、厂商按本体对齐产品</b>的机制（与 ISA-95 同构）。</td></tr>
+<tr><td><b>Airbnb Minerva</b> / <b>Uber uMetric</b></td><td>L2-L3</td><td>互联网大厂指标平台标杆：指标定义代码化（metric-as-code）+ owner 治理 + 口径单一来源。可借鉴：L2→L3 的升级是"平台工程"而非"知识工程"，团队背景应为数据平台。</td></tr>
+<tr><td><b>LinkedIn DataHub / Economic Graph</b></td><td>L2 + L5</td><td>DataHub（开源）以<b>实体-关系图</b>为内核建模元数据——本质是把轻量本体思想做进数据目录；Economic Graph 则是职业世界的 KG 愿景。可借鉴：元数据模型先设计实体类型与关系，再谈界面。</td></tr>
+<tr><td><b>西门子 OPC UA / 工业 4.0 AAS</b></td><td>L4</td><td>2.2 节展开过：本体即信息模型标准的制造业范本。</td></tr>
+</tbody>
+</table>
+
+<h3>4.2 开源中间件分类矩阵</h3>
+<table>
+<thead><tr><th style="width:18%">类别</th><th style="width:30%">代表项目</th><th>与本体的关系与适用场景</th></tr></thead>
+<tbody>
+<tr><td><b>本体编辑 / 语义框架</b></td><td>Protégé、OWL API、Apache Jena、RDF4J</td><td>OWL/RDF 世界的主力工具。Protégé 适合标准对齐与小规模建模；Jena/RDF4J 是 Java 侧 RDF 存取与推理框架。<b>仅当走 RDF 路线才需要。</b></td></tr>
+<tr><td><b>三元组库 / RDF 存储</b></td><td>GraphDB（Ontotex）、Virtuoso、Blazegraph、Apache Jena TDB/Fuseki、Oxigraph</td><td>SPARQL 端点与推理（GraphDB 的 OWL-RL 子集推理最实用）。Wikidata 曾跑在 Blazegraph 上。选型关注推理配置与运维成本。</td></tr>
+<tr><td><b>属性图数据库</b></td><td>Neo4j、NebulaGraph、JanusGraph、Apache AGE（PostgreSQL 扩展）</td><td>KG 实例存储与图算法的事实标准生态。<b>与"本体"的关系：存储层——本体仍需另行管理（常以 YAML/CSV 约束导入）。</b>Apache AGE 值得关注：本体实例直接住进现有 Postgres，零新增运维面。</td></tr>
+<tr><td><b>数据目录（本体寄居地）</b></td><td>DataHub、OpenMetadata、Apache Atlas、Amundsen</td><td>L2 的落地平台；DataHub 的实体-关系元数据模型最接近轻量本体思想（自带类型系统、关系图、血缘）。<b>多数组织 L2 应从这里起步而非自研。</b></td></tr>
+<tr><td><b>语义层 / 指标层</b></td><td>dbt MetricFlow、Cube、Superset 语义层、<b>datus OSI</b></td><td>L3 的落地平台；指标定义即代码。向上承载 L4 的入口——概念等价、词表、权限语义天然挂在这里（datus 路线即此）。</td></tr>
+<tr><td><b>本体/约束校验</b></td><td>pySHACL、SHACL Playground、Great Expectations（数据质量侧）</td><td>SHACL 让"本体约束"进 CI：schema/数据变更破坏概念约束时流水线红灯。Great Expectations 是数据质量侧的互补工具。</td></tr>
+<tr><td><b>KG 构建与消解</b></td><td>spaCy（NER）、LLM 抽取管线、OpenRefine（对齐清洗）、dedupe</td><td>bottom-up 抽取的三件套。LLM 大幅拉低了"从非结构化数据造 KG"的成本，但<b>抽取置信度治理</b>成为新的工程重心。</td></tr>
+</tbody>
+</table>
+
+<h3>4.3 行业趋势研判（2024-2026）</h3>
+<ul>
+  <li><b>LLM 与本体/KG 的双向奔赴（最大趋势）</b>：本体为 LLM 提供 grounded 语义（结构化知识源，抑制幻觉）；LLM 为本体提供低成本构建与对齐（抽取、实体消解、模式归纳自动化）。<b>GraphRAG</b>（微软开源）是范式代表：图社区摘要 + 迭代式检索，多跳问题显著优于纯向量 RAG。对问数场景的直接含义：语义层（L3/L4）的质量决定 LLM 问数的上限——这正是 datus 持续投资 aliases/维度描述的原因。</li>
+  <li><b>语义层/指标层的平台化复兴</b>：dbt Semantic Layer、Cube Cloud、Looker 遗产（LookML）之后，"指标即代码 + 语义 API 化（headless BI）"成为数据平台标准件。指标层的标准化（specs 如 dbt MetricFlow Query Spec）正在做当年 SQL 的事。</li>
+  <li><b>图查询标准化落地</b>：GQL（ISO/IEC 39075:2024，SQL 之后首个新 ISO 查询语言标准）+ SQL:2023 的属性图查询（SQL/PGQ）——图查询从方言走向标准，属性图与关系库的融合（如 Apache AGE、DuckDB 图扩展）降低采纳门槛。</li>
+  <li><b>Data Contract 兴起</b>：schema + 语义 + SLA 作为生产者-消费者间的正式契约——本体从"文档"变成"运行时契约"的组织载体。</li>
+  <li><b>KG + 向量混合检索成为 RAG 标配</b>：向量库负责相似、图负责精确关系与多跳；两者互为补充而非替代。</li>
+  <li><b>开放词汇表持续标准化</b>：schema.org 稳步扩张，行业本体（FIBO、ISA-95 家族、Open Manufacturing Platform 的 OMP Ontologies）向可机读形态（RDF/OWL/JSON-LD）发布——<b>复用成本逐年下降</b>，自建本体的相对价值逐年走低。</li>
+</ul>
+
+<!-- ============================================================ -->
+<h2 id="p5">五、案例章：datus 语义层的本体定位与升级路线</h2>
+
+<p>这一章把前四章的理论对齐到我们自己的系统。核心结论先行：<b>datus/GienBI 的语义层已经是一个工程化的轻量本体（谱系 L3 扎实、L4 部分到达），且其形态——YAML 即本体、CI 校验、与查询引擎同栈——恰好是 3.5 节选型结论的实证。</b></p>
+
+<h3>5.1 现状定位：datus 组件 → 本体概念映射</h3>
+<table>
+<thead><tr><th style="width:30%">datus / GienBI 组件</th><th style="width:20%">谱系定位</th><th>对应的本体概念</th></tr></thead>
+<tbody>
+<tr><td>metric store 的度量定义（OSI measures + create_metric）</td><td>L3</td><td>本体<b>类/概念</b>（Concept）——每个度量是一个带语义定义的业务概念</td></tr>
+<tr><td>度量/维度描述 + <b>aliases</b>（B1 落地）</td><td>L3→L4</td><td>SKOS 的 <span class="mono">prefLabel / altLabel</span>——同义断言，机器可读，向量+FTS 双通道检索</td></tr>
+<tr><td>identifier join（CDSCode 跨模型 belongsTo）</td><td>L4</td><td><b>对象属性</b>（Object Property）——模型间的形式化关系断言</td></tr>
+<tr><td>subject tree（主题树）</td><td>L2→L4</td><td>SKOS <b>ConceptScheme / Broader-Narrower</b>——概念分类体系</td></tr>
+<tr><td>指标 VIEW 权限 + 行权限规则（GienBI 三级权限）</td><td>L4</td><td><b>概念级访问控制公理</b>——SHACL 风格约束的工程化（谁能看哪个概念的哪些实例）</td></tr>
+<tr><td>OSI YAML 作为唯一模型源（dosi/metricflow/cube 三引擎）</td><td>L3-L4</td><td><b>本体即代码</b> + 单一语义源多投影（一个本体概念 → MetricFlow/Cube/Dosi 多执行投影）——正是图 1"本体→数据模型投影"的落地</td></tr>
+<tr><td>cube engine 的 generate-cube-models --from-osi</td><td>L3</td><td>本体投影的<b>确定性编译器</b>——投影不再手工维护</td></tr>
+</tbody>
+</table>
+
+<figure class="stack-fig">
+<svg viewBox="0 0 980 300" xmlns="http://www.w3.org/2000/svg" font-family="-apple-system, PingFang SC, sans-serif">
+  <!-- 谱系条 -->
+  <g font-size="14.5" font-weight="700" text-anchor="middle">
+    <rect x="40"  y="90" width="170" height="56" rx="8" fill="#eef2f6" stroke="#8296aa"/>
+    <text x="125" y="124" fill="#3e5c76">L1 术语表</text>
+    <rect x="225" y="90" width="170" height="56" rx="8" fill="#e3f1f8" stroke="#0b6e99"/>
+    <text x="310" y="124" fill="#0b4a68">L2 业务字典</text>
+    <rect x="410" y="90" width="170" height="56" rx="8" fill="#d8ecdd" stroke="#2e7d4f"/>
+    <text x="495" y="124" fill="#1c4531">L3 语义层</text>
+    <rect x="595" y="90" width="170" height="56" rx="8" fill="#f4ecfb" stroke="#6b3fa0"/>
+    <text x="680" y="124" fill="#3d2160">L4 轻量本体</text>
+    <rect x="780" y="90" width="160" height="56" rx="8" fill="#fdf1e7" stroke="#b3541e"/>
+    <text x="860" y="124" fill="#7a3a13">L5 本体+KG</text>
+  </g>
+  <!-- 覆盖标注 -->
+  <rect x="410" y="90" width="355" height="56" rx="8" fill="none" stroke="#2e7d4f" stroke-width="3.5" stroke-dasharray="9 5"/>
+  <text x="588" y="72" text-anchor="middle" font-size="13.5" font-weight="800" fill="#2e7d4f">datus 语义层当前位置：L3 扎实 · L4 部分实现</text>
+  <!-- 组件落点 -->
+  <g font-size="11.8" fill="#3e5c76">
+    <line x1="495" y1="146" x2="495" y2="190" stroke="#2e7d4f" stroke-width="1.5"/>
+    <text x="495" y="212" text-anchor="middle">OSI 度量/维度定义 · generate-cube-models 投影</text>
+    <line x1="640" y1="146" x2="640" y2="190" stroke="#6b3fa0" stroke-width="1.5"/>
+    <text x="660" y="212" text-anchor="middle">aliases · identifier join · subject tree · 三级权限</text>
+    <line x1="860" y1="146" x2="860" y2="190" stroke="#b3541e" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="856" y="212" text-anchor="middle">未触达（按需）</text>
+    <line x1="310" y1="146" x2="310" y2="190" stroke="#0b6e99" stroke-width="1.5" stroke-dasharray="5 4"/>
+    <text x="305" y="212" text-anchor="middle">catalog 集成（缺口）</text>
+  </g>
+  <text x="490" y="262" text-anchor="middle" font-size="13" font-weight="700" fill="#102a43">形态判断：YAML 即本体 · Git/CI 演进 · 单源多投影 —— 与 3.5 节选型结论完全吻合</text>
+</svg>
+<figcaption>图 5 · datus 语义层在谱系中的现状定位：L3 扎实、L4 部分实现、L5 未触达</figcaption>
+</figure>
+
+<h3>5.2 缺口清单：离"完整 L4"还差什么</h3>
+<ol>
+  <li><b>跨数据源概念等价断言</b>：目前度量在单数据源命名空间内定义；"同一业务概念在两个数据源各有度量"时无机器可读的等价/同义声明（aliases 只在源内生效）。</li>
+  <li><b>维度值受控词表</b>：编码列（StatusType='Active'）的值域与含义未结构化——BIRD 实验 R2 类失败的根源；目前靠 description 文本承载，LLM 靠猜。</li>
+  <li><b>语义变更版本化与影响分析</b>：度量定义变更（口径改动）没有版本快照与下游影响报告（哪些已答问题/报表基于旧口径）。</li>
+  <li><b>目录集成</b>：语义层资产未投影到数据目录（L2 能力），业务用户"找指标"仍需进入 datus 语境。</li>
+  <li><b>维度别名结构化</b>：B1 落地了度量/维度的 Cube meta aliases，但 OSI YAML 转换路径的 dimension 侧 aliases 读取尚未接（当前只能写进 description）。</li>
+</ol>
+
+<h3>5.3 升级路线图（触发条件驱动——不到触发不动）</h3>
+<table>
+<thead><tr><th style="width:30%">升级动作</th><th style="width:38%">业务触发条件</th><th>成本预估</th></tr></thead>
+<tbody>
+<tr><td>维度值受控词表（OSI dimensions 增 value_domain 字段 → Cube meta / 提示面）</td><td>问数场景中编码列误选成为主要失败类（BIRD R2 类失败占比上升）</td><td>小：YAML schema 扩展 + 转换器透传 + 提示面渲染，1-2 天</td></tr>
+<tr><td>维度 aliases 接入转换器（补齐 5.2-5）</td><td>维度类问题（过滤/分组）的中文命中率成为瓶颈</td><td>小：transpile/generate 已有度量侧实现，对称扩展即可</td></tr>
+<tr><td>跨源概念等价断言（metric store 增 same_as 列 + 检索合并）</td><td>GienBI 多租户/多数据源出现同一业务概念多处定义，用户问数需要跨源归一</td><td>中：schema + 同步 + 检索去重，3-5 天</td></tr>
+<tr><td>语义变更版本化（度量定义变更历史 + 影响报告）</td><td>口径改动引发下游质疑/审计要求（金融类租户）</td><td>中：存储 + 变更对比工具</td></tr>
+<tr><td>目录投影（语义层资产 → DataHub/OpenMetadata）</td><td>业务用户自助找指标需求成型，或企业已有目录平台要求接入</td><td>中：一次性导出器 + 定时任务</td></tr>
+<tr><td>L5：实例图谱（客户 360 / 关系穿透）</td><td>出现真实多跳分析场景（风控穿透、供应链影响传播），且 L1-L4 已扎实</td><td>大：图存储 + 实体消解运营——按 4.1 标杆经验，无专职运营不做</td></tr>
+</tbody>
+</table>
+
+<div class="callout ok">
+<span class="t">本章结论</span>
+datus 不需要"引入本体"——它已经是轻量本体，且工程形态（YAML/Git/CI/单源多投影）选在了正确的一格。下一步的全部工作是<b>按触发条件补 L4 的四个缺口</b>（词表、等价、版本化、目录投影），而不是跃迁 L5。当且仅当出现真实的多跳推理/实体图谱业务场景时，再评估属性图存储与 GraphRAG 增强路径。
+</div>
+
+<footer>
+语义层谱系与选型立场速查：停在业务触发条件到达的那一层 · 本体即代码 · 复用标准优先 · 形式化程度由消费方决定<br>
+本文档由 grilling 访谈七项决策生成（定位 B / design 单篇 HTML / 11 维对比 / ERP+MES 加重 / 谱系主轴 / 原则+方法论+选型 / datus 案例章 + 业界实践与趋势章）· 2026-09
+</footer>
+
+</div>
+</body>
+</html>
